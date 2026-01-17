@@ -61,7 +61,7 @@ export function ViewerShell({ projectId }: { projectId: string }) {
 
   return (
     <div className="h-[100dvh] w-full">
-      <div className="flex h-14 items-center justify-between border-b px-4">
+      <div className="flex h-14 items-center justify-between glass border-b border-white/10 px-4">
         <div className="flex items-center gap-2">
           <Link href="/" className="font-semibold">
             CODEVIZ

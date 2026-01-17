@@ -9,7 +9,7 @@ type Props = {
 
 export function TopNav({ isAuthed }: Props) {
   return (
-    <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
+    <header className="sticky top-0 z-20 glass border-b border-white/10">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <Link href="/" className="font-semibold tracking-tight">
           CODEVIZ

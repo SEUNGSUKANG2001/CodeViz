@@ -44,7 +44,7 @@ export function ControlsPanel({ project }: Props) {
   const stats = project?.latestJob?.result?.stats as Record<string, number> | undefined;
 
   return (
-    <aside className="overflow-y-auto border-l bg-background p-4">
+    <aside className="overflow-y-auto glass border-l border-white/10 p-4">
       <Card>
         <CardContent className="p-4">
           <div className="mb-3 flex items-center justify-between">
