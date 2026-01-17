@@ -81,12 +81,13 @@ export function formatUserProfile(user: Pick<User, 'id' | 'username' | 'displayN
 }
 
 export function formatPostCard(
-  post: Post & { author: User; _count: { likes: number; comments: number } }
+  post: Post & { author: User; _count: { likes: number; comments: number } },
+  coverUrl?: string | null
 ) {
   return {
     postId: post.id,
     title: post.title,
-    coverUrl: null, // Will be set from snapshot if available
+    coverUrl: coverUrl ?? null,
     author: formatUserSummary(post.author),
     likeCount: post._count.likes,
     commentCount: post._count.comments,

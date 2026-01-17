@@ -52,9 +52,12 @@ export async function GET(request: NextRequest, { params }: Params) {
         id: post.snapshot.id,
         coverUrl: post.snapshot.coverUrl,
         config: post.snapshot.config,
-        job: {
-          resultUrl: post.snapshot.job?.resultUrl || null,
-        },
+        job: post.snapshot.job
+          ? {
+              id: post.snapshot.job.id,
+              status: post.snapshot.job.status,
+            }
+          : null,
       },
       projectLink: {
         projectId: post.snapshot.projectId,

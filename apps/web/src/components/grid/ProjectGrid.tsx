@@ -1,0 +1,29 @@
+"use client";
+
+import Link from "next/link";
+import type { ProjectCard as ProjectCardT } from "@/lib/types";
+import { ProjectCard } from "@/components/cards/ProjectCard";
+
+type Props = {
+  items: ProjectCardT[];
+};
+
+export function ProjectGrid({ items }: Props) {
+  if (!items || items.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+        No projects yet. Create one to get started!
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((p) => (
+        <Link key={p.id} href={`/p/${p.id}`}>
+          <ProjectCard item={p} />
+        </Link>
+      ))}
+    </div>
+  );
+}

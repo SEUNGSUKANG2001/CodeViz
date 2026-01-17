@@ -61,9 +61,7 @@ export async function GET(request: NextRequest) {
       : null;
 
   const formattedItems = items.map((post) => {
-    const card = formatPostCard(post);
-    card.coverUrl = post.snapshot.coverUrl;
-    return card;
+    return formatPostCard(post, post.snapshot.coverUrl);
   });
 
   return successResponse({

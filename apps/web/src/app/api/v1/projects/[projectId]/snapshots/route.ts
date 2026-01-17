@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import {
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     data: {
       projectId,
       jobId: body.jobId || null,
-      config: body.config,
+      config: body.config as Prisma.InputJsonValue,
       coverUrl,
     },
     include: {

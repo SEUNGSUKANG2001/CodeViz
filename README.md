@@ -1,6 +1,14 @@
 # CodeViz
 
-GitHub 레포를 입력받아 코드 구조를 분석하고 3D로 시각화하는 소셜 플랫폼 백엔드
+GitHub 레포를 입력받아 코드 구조를 분석하고 3D로 시각화하는 소셜 플랫폼
+
+## 주요 기능
+
+- GitHub 레포 URL 입력 → 코드 구조 분석 → 3D 시각화
+- Kakao OAuth 로그인
+- 분석 결과를 게시글로 공유
+- 좋아요, 댓글, 팔로우 등 소셜 기능
+- 프로필 관리
 
 ## 아키텍처
 
@@ -20,11 +28,12 @@ GitHub 레포를 입력받아 코드 구조를 분석하고 3D로 시각화하�
 
 ## 기술 스택
 
-- **Web Backend**: Next.js 14 (App Router), TypeScript, Prisma
+- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui
+- **Backend**: Next.js API Routes, Prisma ORM
 - **Database**: PostgreSQL 15
 - **Cache/Queue**: Redis 7
 - **Worker**: Python 3.11, RQ (Redis Queue)
-- **Storage**: AWS S3
+- **Storage**: AWS S3 (Presigned URLs for private objects)
 - **Auth**: Kakao OAuth + Session Cookies
 
 ## 로컬 개발 환경 설정
@@ -75,18 +84,22 @@ python -m src.worker
 ## Docker Compose로 전체 실행
 
 ```bash
-# 빌드 및 실행
-docker-compose up --build
+# 빌드 및 실행 (migrate 서비스가 자동으로 DB 마이그레이션 실행)
+docker compose up --build
 
 # 백그라운드 실행
-docker-compose up -d
+docker compose up -d
 
 # 로그 확인
-docker-compose logs -f web
-docker-compose logs -f worker
+docker compose logs -f web
+docker compose logs -f worker
+docker compose logs migrate  # 마이그레이션 로그
 
 # 종료
-docker-compose down
+docker compose down
+
+# 볼륨 포함 완전 초기화
+docker compose down -v
 ```
 
 ## API 엔드포인트
@@ -107,6 +120,7 @@ docker-compose down
 ### Jobs
 - `POST /api/v1/projects/{id}/jobs` - 재분석 Job 생성
 - `GET /api/v1/projects/{id}/jobs/latest` - 최신 Job 상태
+- `GET /api/v1/analysis-jobs/{id}/result-url` - 분석 결과 Presigned URL 발급
 
 ### Snapshots & Posts
 - `POST /api/v1/projects/{id}/snapshots` - 스냅샷 생성
@@ -226,6 +240,47 @@ npx prisma migrate deploy
 ### S3 업로드 실패
 1. AWS 자격 증명 확인
 2. S3 버킷 권한 확인 (PutObject, GetObject)
+
+### S3 CORS 오류 (Failed to fetch graph data)
+
+S3 버킷에 CORS 설정이 필요합니다.
+
+**AWS Console → S3 → 버킷 → Permissions → CORS:**
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET"],
+    "AllowedOrigins": ["http://localhost:3000", "https://your-domain.com"],
+    "ExposeHeaders": [],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+## 프로젝트 구조
+
+```
+codeviz/
+├── apps/
+│   ├── web/                    # Next.js 앱 (Frontend + Backend API)
+│   │   ├── src/
+│   │   │   ├── app/            # App Router pages & API routes
+│   │   │   ├── components/     # React components
+│   │   │   └── lib/            # Utilities (auth, prisma, s3, etc.)
+│   │   ├── prisma/             # Database schema & migrations
+│   │   └── Dockerfile
+│   │
+│   └── worker/                 # Python RQ Worker
+│       ├── src/
+│       │   ├── jobs/           # Job handlers
+│       │   └── services/       # DB, S3, analyzer services
+│       └── Dockerfile
+│
+├── docker-compose.yml
+└── README.md
+```
 
 ## 라이선스
 

@@ -15,7 +15,7 @@ def get_s3_client():
 
 
 def upload_graph_json(job_id: str, graph_data: dict[str, Any]) -> str:
-    """Upload graph.json to S3 and return the public URL."""
+    """Upload graph.json to S3 privately and return the S3 object key."""
     s3 = get_s3_client()
 
     key = f"codeviz/graphs/{job_id}/graph.json"
@@ -26,6 +26,8 @@ def upload_graph_json(job_id: str, graph_data: dict[str, Any]) -> str:
         Key=key,
         Body=body.encode("utf-8"),
         ContentType="application/json",
+        # No ACL specified = private by default
     )
 
-    return f"https://{config.S3_BUCKET}.s3.{config.AWS_REGION}.amazonaws.com/{key}"
+    # Return only the S3 key, not a public URL
+    return key
