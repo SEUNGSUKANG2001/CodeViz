@@ -7,10 +7,6 @@ import type { PostDetail, PostDetailResponse } from "@/lib/types";
 import { TopNav } from "@/components/nav/TopNav";
 import { RightActionBar } from "@/components/post/RightActionBar";
 import { Comments } from "@/components/post/Comments";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 
 export function PostDetailPageClient({ postId }: { postId: string }) {
   const [post, setPost] = useState<PostDetail | null>(null);
@@ -33,80 +29,142 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
   }, [postId]);
 
   return (
-    <main className="min-h-screen">
+    <main className="relative min-h-screen bg-[#fbfbfc] text-neutral-900">
+      {/* Background */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle at 18% 12%, rgba(79,70,229,0.06), transparent 45%),
+            radial-gradient(circle at 80% 18%, rgba(0,0,0,0.06), transparent 46%),
+            linear-gradient(180deg, rgba(255,255,255,0.0) 0%, rgba(0,0,0,0.02) 100%)
+          `,
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.10]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, rgba(0,0,0,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.12) 1px, transparent 1px)",
+          backgroundSize: "96px 96px",
+        }}
+      />
+
       <TopNav />
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-8 lg:grid-cols-[1fr_320px]">
+
+      <div className="relative z-10 mx-auto grid max-w-[1600px] grid-cols-1 gap-12 px-10 pt-8 pb-16 lg:grid-cols-[1fr_280px]">
+        {/* Main */}
         <section>
           {loading ? (
-            <div className="text-sm text-muted-foreground">Loading...</div>
+            <div className="text-sm text-neutral-500">Loading...</div>
           ) : post ? (
             <>
-              <header className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-tight">{post.title}</h1>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                  <Link href={authorHref} className="flex items-center gap-2 hover:underline">
-                    <Avatar className="h-7 w-7">
-                      <AvatarImage src={post.author.avatarUrl ?? undefined} />
-                      <AvatarFallback>{post.author.displayName?.[0] ?? "U"}</AvatarFallback>
-                    </Avatar>
+              {/* Header */}
+              <header className="space-y-4">
+                <h1 className="text-3xl font-semibold tracking-tight">
+                  {post.title}
+                </h1>
+
+                <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-500">
+                  <Link
+                    href={authorHref}
+                    className="flex items-center gap-2 hover:text-neutral-900"
+                  >
+                    <div className="h-6 w-6 rounded-full bg-neutral-100 overflow-hidden">
+                      {post.author.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={post.author.avatarUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs font-medium text-neutral-400">
+                          {post.author.displayName?.[0] ?? "U"}
+                        </div>
+                      )}
+                    </div>
                     <span>{post.author.displayName ?? "User"}</span>
                   </Link>
-                  <span>·</span>
-                  <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+
+                  <span className="h-1 w-1 rounded-full bg-neutral-300" />
+                  <span>
+                    {new Date(post.createdAt).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
 
                   {post.tags.length > 0 && (
                     <div className="flex gap-1">
                       {post.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">
+                        <span
+                          key={tag}
+                          className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600"
+                        >
                           {tag}
-                        </Badge>
+                        </span>
                       ))}
                     </div>
                   )}
 
-                  <div className="ml-auto flex gap-2">
-                    {post.projectLink?.projectId && (
-                      <Button asChild size="sm" variant="secondary">
-                        <Link href={`/p/${post.projectLink.projectId}`}>
-                          Open in Viewer
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
+                  {post.projectLink?.projectId && (
+                    <Link
+                      href={`/p/${post.projectLink.projectId}`}
+                      className="ml-auto rounded-full bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-800"
+                    >
+                      Open in Viewer
+                    </Link>
+                  )}
                 </div>
               </header>
 
-              <div className="mt-6 overflow-hidden rounded-xl border bg-gradient-to-br from-slate-100 to-slate-200">
-                {post.snapshot.coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={post.snapshot.coverUrl}
-                    alt={post.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex aspect-[16/9] w-full items-center justify-center text-6xl">
-                    🏙️
-                  </div>
-                )}
+              {/* Visualization */}
+              <div className="mt-10 overflow-hidden rounded-2xl bg-neutral-100">
+                <div className="aspect-[16/9]">
+                  {post.snapshot.coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={post.snapshot.coverUrl}
+                      alt={post.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="h-full w-full"
+                      style={{
+                        backgroundImage:
+                          "radial-gradient(circle at 35% 40%, rgba(79,70,229,0.16), transparent 50%), radial-gradient(circle at 70% 65%, rgba(0,0,0,0.10), transparent 52%), linear-gradient(135deg, rgba(255,255,255,0.86), rgba(255,255,255,0))",
+                      }}
+                    />
+                  )}
+                </div>
               </div>
 
+              {/* Body */}
               {post.body && (
-                <div className="mt-6">
-                  <p className="whitespace-pre-wrap text-muted-foreground">{post.body}</p>
+                <div className="mt-10">
+                  <p className="whitespace-pre-wrap text-neutral-700 leading-relaxed">
+                    {post.body}
+                  </p>
                 </div>
               )}
 
-              <Separator className="my-8" />
-
-              <Comments postId={postId} initialCount={post.counts.comments} />
+              {/* Comments */}
+              <div className="mt-12 pt-8 border-t border-neutral-200">
+                <Comments postId={postId} initialCount={post.counts.comments} />
+              </div>
             </>
           ) : (
-            <div className="text-sm text-muted-foreground">Post not found</div>
+            <div className="text-sm text-neutral-500">Post not found</div>
           )}
         </section>
 
-        <aside className="lg:sticky lg:top-20 lg:self-start">
+        {/* Sidebar */}
+        <aside className="lg:sticky lg:top-8 lg:self-start">
           {post && <RightActionBar post={post} onPostUpdate={setPost} />}
         </aside>
       </div>

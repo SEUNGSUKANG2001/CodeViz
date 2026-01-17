@@ -5,9 +5,6 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import type { CreateSnapshotResponse, CreatePostResponse } from "@/lib/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
 
 type Props = {
   open: boolean;
@@ -79,41 +76,53 @@ export function PublishDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Publish to community</DialogTitle>
+          <DialogTitle className="text-neutral-900">Publish to community</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-5">
           <div>
-            <label className="mb-1 block text-sm font-medium">Title</label>
-            <Input
+            <label className="mb-2 block text-sm font-medium text-neutral-900">Title</label>
+            <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Give your visualization a title"
+              className="w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Repository</label>
-            <Input value={repoUrl} readOnly className="bg-muted" />
+            <label className="mb-2 block text-sm font-medium text-neutral-900">Repository</label>
+            <input
+              value={repoUrl}
+              readOnly
+              className="w-full rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-500 outline-none"
+            />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Description</label>
-            <Textarea
+            <label className="mb-2 block text-sm font-medium text-neutral-900">Description</label>
+            <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="Describe your project..."
-              className="min-h-[140px]"
+              className="w-full min-h-[120px] rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-indigo-500 resize-none"
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            <button
+              onClick={() => onOpenChange(false)}
+              className="rounded-full bg-neutral-100 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-200"
+            >
               Cancel
-            </Button>
-            <Button onClick={onPublish} disabled={loading || !title.trim()}>
+            </button>
+            <button
+              onClick={onPublish}
+              disabled={loading || !title.trim()}
+              className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:bg-neutral-200 disabled:text-neutral-500"
+            >
               {loading ? "Publishing..." : "Publish"}
-            </Button>
+            </button>
           </div>
         </div>
       </DialogContent>

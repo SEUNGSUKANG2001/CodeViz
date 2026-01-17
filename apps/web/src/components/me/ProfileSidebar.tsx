@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 import type { MeResponse } from "@/lib/types";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 
 type Props = {
   me: MeResponse | null;
@@ -13,12 +10,8 @@ type Props = {
 export function ProfileSidebar({ me }: Props) {
   if (!me) {
     return (
-      <aside className="space-y-4">
-        <Card>
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            Loading...
-          </CardContent>
-        </Card>
+      <aside>
+        <div className="text-sm text-neutral-500">Loading...</div>
       </aside>
     );
   }
@@ -26,17 +19,13 @@ export function ProfileSidebar({ me }: Props) {
   if (me.ok === false) {
     return (
       <aside className="space-y-4">
-        <Card>
-          <CardContent className="space-y-3 p-4">
-            <div className="text-sm text-muted-foreground">Login required</div>
-            <Button
-              onClick={() => (window.location.href = "/api/v1/auth/kakao/start")}
-              className="w-full"
-            >
-              Kakao Login
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="text-sm text-neutral-500">Login required</div>
+        <button
+          onClick={() => (window.location.href = "/api/v1/auth/kakao/start")}
+          className="w-full rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+        >
+          Login
+        </button>
       </aside>
     );
   }
@@ -44,29 +33,31 @@ export function ProfileSidebar({ me }: Props) {
   const u = me.data.user;
 
   return (
-    <aside className="space-y-4">
-      <Card>
-        <CardContent className="p-4">
-          <Link href="/me/edit" className="flex items-center gap-3">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={u.avatarUrl ?? undefined} />
-              <AvatarFallback>{u.displayName?.[0] ?? "U"}</AvatarFallback>
-            </Avatar>
-            <div>
-              <div className="font-medium leading-tight">
-                {u.displayName ?? "User"}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                @{u.username ?? "user"}
-              </div>
+    <aside>
+      <Link href="/me/edit" className="flex items-center gap-3">
+        <div className="h-14 w-14 rounded-full bg-neutral-100 overflow-hidden">
+          {u.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={u.avatarUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-xl font-medium text-neutral-400">
+              {u.displayName?.[0] ?? "U"}
             </div>
-          </Link>
-
-          <div className="mt-4 text-sm text-muted-foreground">
-            Click profile to edit.
+          )}
+        </div>
+        <div>
+          <div className="font-semibold text-neutral-900">
+            {u.displayName ?? "User"}
           </div>
-        </CardContent>
-      </Card>
+          <div className="text-sm text-neutral-500">
+            @{u.username ?? "user"}
+          </div>
+        </div>
+      </Link>
+
+      <div className="mt-4 text-sm text-neutral-400">
+        Click profile to edit
+      </div>
     </aside>
   );
 }

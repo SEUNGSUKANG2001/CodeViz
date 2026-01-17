@@ -3,10 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
 import type { Comment, ListCommentsResponse, CreateCommentResponse } from "@/lib/types";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
 
 type Props = {
   postId: string;
@@ -68,58 +64,68 @@ export function Comments({ postId, initialCount }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-end justify-between">
-        <h3 className="text-lg font-semibold">Comments</h3>
-        <span className="text-sm text-muted-foreground">
+        <h3 className="text-lg font-semibold text-neutral-900">Comments</h3>
+        <span className="text-sm text-neutral-500">
           {initialCount ?? items.length}
         </span>
       </div>
 
-      <div className="rounded-xl border p-3">
-        <Textarea
+      {/* Write comment */}
+      <div>
+        <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Write a comment..."
-          className="min-h-[90px]"
+          className="w-full min-h-[80px] rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-indigo-500 resize-none"
         />
         <div className="mt-3 flex justify-end">
-          <Button onClick={submit} disabled={posting || !body.trim()}>
+          <button
+            onClick={submit}
+            disabled={posting || !body.trim()}
+            className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:bg-neutral-200 disabled:text-neutral-500"
+          >
             {posting ? "Posting..." : "Post"}
-          </Button>
+          </button>
         </div>
       </div>
 
-      <Separator />
-
+      {/* Comments list */}
       {loading && items.length === 0 ? (
-        <div className="text-sm text-muted-foreground">Loading...</div>
+        <div className="text-sm text-neutral-500">Loading...</div>
       ) : items.length === 0 ? (
-        <div className="text-sm text-muted-foreground">No comments yet.</div>
+        <div className="py-8 text-center text-sm text-neutral-400">No comments yet.</div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {items.map((c) => (
             <div key={c.id} className="flex gap-3">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={c.author.avatarUrl ?? undefined} />
-                <AvatarFallback>{c.author.displayName?.[0] ?? "U"}</AvatarFallback>
-              </Avatar>
+              <div className="h-8 w-8 rounded-full bg-neutral-100 overflow-hidden flex-shrink-0">
+                {c.author.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.author.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs font-medium text-neutral-400">
+                    {c.author.displayName?.[0] ?? "U"}
+                  </div>
+                )}
+              </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium">
+                  <span className="font-medium text-neutral-900">
                     {c.author.displayName ?? "User"}
                   </span>
-                  <span className="text-muted-foreground">
+                  <span className="text-neutral-400">
                     @{c.author.username ?? "user"}
                   </span>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="text-muted-foreground">
+                  <span className="h-1 w-1 rounded-full bg-neutral-300" />
+                  <span className="text-neutral-400">
                     {new Date(c.createdAt).toLocaleDateString()}
                   </span>
                 </div>
-                <div className="mt-1 whitespace-pre-wrap text-sm">
+                <div className="mt-1 whitespace-pre-wrap text-sm text-neutral-700">
                   {c.isDeleted ? (
-                    <span className="text-muted-foreground">(deleted)</span>
+                    <span className="text-neutral-400">(deleted)</span>
                   ) : (
                     c.body
                   )}
@@ -131,14 +137,14 @@ export function Comments({ postId, initialCount }: Props) {
       )}
 
       {hasMore && (
-        <div className="pt-2">
-          <Button
-            variant="secondary"
+        <div>
+          <button
             onClick={() => load(cursor)}
             disabled={loading}
+            className="rounded-full bg-neutral-100 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-200 disabled:opacity-50"
           >
             Load more
-          </Button>
+          </button>
         </div>
       )}
     </div>

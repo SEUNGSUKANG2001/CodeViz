@@ -10,8 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 
 type Props = {
   open: boolean;
@@ -48,39 +46,48 @@ export function NewProjectDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>New Project</DialogTitle>
+          <DialogTitle className="text-neutral-900">New Project</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-5">
           <div>
-            <label className="mb-1 block text-sm font-medium">
+            <label className="mb-2 block text-sm font-medium text-neutral-900">
               Repository URL
             </label>
-            <Input
+            <input
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/org/repo"
+              className="w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">
+            <label className="mb-2 block text-sm font-medium text-neutral-900">
               Branch / Ref
             </label>
-            <Input
+            <input
               value={ref}
               onChange={(e) => setRef(e.target.value)}
               placeholder="main"
+              className="w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            <button
+              onClick={() => onOpenChange(false)}
+              className="rounded-full bg-neutral-100 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-200"
+            >
               Cancel
-            </Button>
-            <Button onClick={create} disabled={loading || !repoUrl.trim()}>
+            </button>
+            <button
+              onClick={create}
+              disabled={loading || !repoUrl.trim()}
+              className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:bg-neutral-200 disabled:text-neutral-500"
+            >
               {loading ? "Creating..." : "Create"}
-            </Button>
+            </button>
           </div>
         </div>
       </DialogContent>

@@ -18,7 +18,6 @@ export function ThreeViewer({ project, loading }: Props) {
   const jobId = project?.latestJob?.id;
   const progress = project?.latestJob?.progress;
 
-  // Fetch graph data when job is done
   useEffect(() => {
     if (jobStatus !== "done" || !jobId) {
       setGraphData(null);
@@ -32,99 +31,105 @@ export function ThreeViewer({ project, loading }: Props) {
       setGraphError(null);
 
       try {
-        // 1. Get presigned URL from API
         const urlRes = await apiFetch<ResultUrlResponse>(
           `/api/v1/analysis-jobs/${jobId}/result-url`
         );
 
-        // 2. Fetch graph.json using presigned URL
         const graphRes = await fetch(urlRes.data.url);
-        if (!graphRes.ok) {
-          throw new Error("Failed to fetch graph data");
-        }
+        if (!graphRes.ok) throw new Error("Failed to fetch graph data");
 
         const data: GraphData = await graphRes.json();
-        if (!cancelled) {
-          setGraphData(data);
-        }
+        if (!cancelled) setGraphData(data);
       } catch (e) {
         if (!cancelled) {
           const error = e as Error;
           setGraphError(error.message ?? "Failed to load graph");
         }
       } finally {
-        if (!cancelled) {
-          setGraphLoading(false);
-        }
+        if (!cancelled) setGraphLoading(false);
       }
     }
 
     fetchGraph();
-
     return () => {
       cancelled = true;
     };
   }, [jobStatus, jobId]);
 
   return (
-    <div className="relative h-full bg-gradient-to-b from-slate-900 to-slate-800">
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70">
-        {loading ? (
-          <div className="text-center">
-            <div className="mb-2 text-lg">Loading project...</div>
-          </div>
-        ) : jobStatus === "queued" || jobStatus === "running" ? (
-          <div className="text-center">
-            <div className="mb-2 text-lg">
-              {jobStatus === "queued" ? "Job queued..." : "Analyzing repository..."}
-            </div>
-            {progress !== null && progress !== undefined && (
-              <div className="w-48 rounded-full bg-slate-700">
-                <div
-                  className="h-2 rounded-full bg-blue-500 transition-all"
-                  style={{ width: `${Math.round(progress * 100)}%` }}
-                />
+    <div className="relative h-full bg-[#fbfbfc]">
+      <div className="flex h-full items-center justify-center p-8">
+        {/* Visualization Frame */}
+        <div className="relative h-full w-full rounded-2xl bg-neutral-100 overflow-hidden">
+
+          {/* Status Overlay */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-600">
+
+            {loading ? (
+              <StatusBlock title="Loading project..." />
+            ) : jobStatus === "queued" || jobStatus === "running" ? (
+              <div className="text-center">
+                <div className="mb-2 text-lg font-medium">
+                  {jobStatus === "queued" ? "Job queued..." : "Analyzing repository..."}
+                </div>
+
+                {progress !== null && progress !== undefined && (
+                  <div className="mt-3 w-48 h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-indigo-500 transition-all"
+                      style={{ width: `${Math.round(progress * 100)}%` }}
+                    />
+                  </div>
+                )}
+
+                <div className="mt-3 text-sm text-neutral-500">
+                  {project?.latestJob?.message ?? "Processing..."}
+                </div>
+              </div>
+            ) : jobStatus === "failed" ? (
+              <div className="text-center">
+                <div className="mb-2 text-lg font-medium text-red-600">Analysis failed</div>
+                <div className="text-sm text-neutral-500">Please try again or check the repository URL</div>
+              </div>
+            ) : graphLoading ? (
+              <StatusBlock title="Loading visualization..." />
+            ) : graphError ? (
+              <div className="text-center">
+                <div className="mb-2 text-lg font-medium text-red-600">Failed to load graph</div>
+                <div className="text-sm text-neutral-500">{graphError}</div>
+              </div>
+            ) : graphData ? (
+              <div className="text-center">
+                <div className="mb-4 text-6xl">🏙️</div>
+                <div className="text-lg font-medium text-neutral-900">3D Viewer Placeholder</div>
+                <div className="mt-2 text-sm text-neutral-500">
+                  Three.js will render here
+                </div>
+                <div className="mt-4 rounded-full bg-white px-4 py-2 text-xs text-neutral-600">
+                  Loaded: {graphData.nodes.length} nodes · {graphData.edges.length} edges
+                </div>
+              </div>
+            ) : (
+              <div className="text-center">
+                <div className="mb-4 text-6xl">📊</div>
+                <div className="text-lg font-medium text-neutral-900">No visualization available</div>
+                <div className="mt-2 text-sm text-neutral-500">
+                  Submit a repository to analyze
+                </div>
               </div>
             )}
-            <div className="mt-2 text-sm">
-              {project?.latestJob?.message ?? "Processing..."}
-            </div>
           </div>
-        ) : jobStatus === "failed" ? (
-          <div className="text-center text-red-400">
-            <div className="mb-2 text-lg">Analysis failed</div>
-            <div className="text-sm">Please try again or check the repository URL</div>
-          </div>
-        ) : graphLoading ? (
-          <div className="text-center">
-            <div className="mb-2 text-lg">Loading visualization...</div>
-          </div>
-        ) : graphError ? (
-          <div className="text-center text-red-400">
-            <div className="mb-2 text-lg">Failed to load graph</div>
-            <div className="text-sm">{graphError}</div>
-          </div>
-        ) : graphData ? (
-          <div className="text-center">
-            <div className="mb-4 text-6xl">🏙️</div>
-            <div className="text-lg">3D Viewer Placeholder</div>
-            <div className="mt-2 text-sm text-white/50">
-              Three.js will render here
-            </div>
-            <div className="mt-4 rounded bg-slate-700/50 px-3 py-2 text-xs">
-              Loaded: {graphData.nodes.length} nodes, {graphData.edges.length} edges
-            </div>
-          </div>
-        ) : (
-          <div className="text-center">
-            <div className="mb-4 text-6xl">📊</div>
-            <div className="text-lg">No visualization available</div>
-            <div className="mt-2 text-sm text-white/50">
-              Submit a repository to analyze
-            </div>
-          </div>
-        )}
+
+        </div>
       </div>
+    </div>
+  );
+}
+
+function StatusBlock({ title }: { title: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-lg font-medium text-neutral-900">{title}</div>
     </div>
   );
 }

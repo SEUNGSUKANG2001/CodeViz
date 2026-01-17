@@ -4,10 +4,6 @@ import { Dispatch, SetStateAction } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import type { PostDetail, ToggleLikeResponse, ToggleFollowResponse } from "@/lib/types";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
 
 type Props = {
   post: PostDetail;
@@ -54,54 +50,62 @@ export function RightActionBar({ post, onPostUpdate }: Props) {
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="p-4">
-          <Link href={`/u/${post.author.id}`} className="flex items-center gap-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={post.author.avatarUrl ?? undefined} />
-              <AvatarFallback>{post.author.displayName?.[0] ?? "U"}</AvatarFallback>
-            </Avatar>
-            <div>
-              <div className="font-medium leading-tight">
-                {post.author.displayName ?? "User"}
+    <div className="space-y-6">
+      {/* Author */}
+      <div>
+        <Link href={`/u/${post.author.id}`} className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-full bg-neutral-100 overflow-hidden">
+            {post.author.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={post.author.avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-sm font-medium text-neutral-400">
+                {post.author.displayName?.[0] ?? "U"}
               </div>
-              <div className="text-xs text-muted-foreground">
-                @{post.author.username ?? "user"}
-              </div>
-            </div>
-          </Link>
-
-          <Separator className="my-4" />
-
-          <div className="flex flex-col gap-2">
-            <Button onClick={onFollow} variant="secondary">
-              + Follow
-            </Button>
-            <Button onClick={onShare} variant="secondary">
-              Share Link
-            </Button>
-            <Button onClick={onToggleLike}>
-              👍 Like · {post.counts.likes}
-            </Button>
+            )}
           </div>
-        </CardContent>
-      </Card>
-
-      {post.snapshot.job && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="mb-2 text-sm font-medium">Analysis</div>
-            <div className="text-xs text-muted-foreground">
-              Status: {post.snapshot.job.status}
+          <div>
+            <div className="font-medium leading-tight text-neutral-900">
+              {post.author.displayName ?? "User"}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="rounded-xl border bg-background p-3 text-sm text-muted-foreground">
-        Tip: The sidebar stays fixed while content scrolls.
+            <div className="text-xs text-neutral-500">
+              @{post.author.username ?? "user"}
+            </div>
+          </div>
+        </Link>
       </div>
+
+      {/* Actions */}
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={onToggleLike}
+          className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+        >
+          Like · {post.counts.likes}
+        </button>
+        <button
+          onClick={onFollow}
+          className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+        >
+          Follow
+        </button>
+        <button
+          onClick={onShare}
+          className="rounded-full bg-neutral-100 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-200"
+        >
+          Share Link
+        </button>
+      </div>
+
+      {/* Stats */}
+      {post.snapshot.job && (
+        <div className="pt-4">
+          <div className="text-[11px] tracking-[0.18em] text-neutral-400">ANALYSIS</div>
+          <div className="mt-2 text-sm text-neutral-600">
+            Status: <span className="font-medium text-neutral-900">{post.snapshot.job.status}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

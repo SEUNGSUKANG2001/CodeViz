@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 
 type Props = {
   isAuthed?: boolean;
@@ -9,26 +8,40 @@ type Props = {
 
 export function TopNav({ isAuthed }: Props) {
   return (
-    <header className="sticky top-0 z-20 glass border-b border-white/10">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-        <Link href="/" className="font-semibold tracking-tight">
-          CODEVIZ
+    <header className="relative z-20 w-full px-10 py-7">
+      <div className="mx-auto flex max-w-[1600px] items-center justify-between">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="relative h-9 w-9 rounded-2xl border border-neutral-300 bg-white">
+            <div className="absolute left-2 top-2 h-2 w-2 rounded-full bg-indigo-600" />
+          </div>
+          <span className="text-sm font-semibold tracking-[0.18em] text-neutral-900">
+            CODEVIZ
+          </span>
         </Link>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/feed"
+            className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
+          >
+            Explore
+          </Link>
           {isAuthed ? (
-            <Button asChild variant="secondary" size="sm">
-              <Link href="/me">My Page</Link>
-            </Button>
+            <Link
+              href="/me"
+              className="rounded-full bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-800"
+            >
+              My Page
+            </Link>
           ) : (
-            <Button
-              size="sm"
+            <button
               onClick={() => {
                 window.location.href = "/api/v1/auth/kakao/start";
               }}
+              className="rounded-full bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-800"
             >
-              Kakao Login
-            </Button>
+              Login
+            </button>
           )}
         </div>
       </div>
