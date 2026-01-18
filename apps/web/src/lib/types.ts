@@ -226,13 +226,22 @@ export type ResultUrlResponse = {
   };
 };
 
+export type SymbolInfo = {
+  symbol: string;
+  kind: string;
+  line: number;
+};
+
 export type GraphNode = {
   id: string;
   name: string;
+  path?: string;
   type: string;
-  parent?: string;
+  parent?: string | null;
   loc?: number;
+  lines?: number;
   language?: string;
+  symbols?: SymbolInfo[];
 };
 
 export type GraphEdge = {
@@ -241,12 +250,38 @@ export type GraphEdge = {
   type: string;
 };
 
+export type CommitFile = {
+  path: string;
+  status: string;
+};
+
+export type CommitInfo = {
+  hash: string;
+  message: string;
+  author: string;
+  timestamp: number;
+  files: CommitFile[];
+};
+
+export type GraphStats = {
+  nodeCount: number;
+  edgeCount: number;
+  fileCount: number;
+  directoryCount: number;
+  totalLines: number;
+  languages?: Record<string, number>;
+  commitCount?: number;
+};
+
 export type GraphData = {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  history?: CommitInfo[];
+  stats?: GraphStats;
   metadata?: {
     repoUrl: string;
     ref?: string | null;
     analyzedAt?: string;
+    version?: string;
   };
 };
