@@ -7,6 +7,7 @@ import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { GraphData } from "@/lib/types";
+import { createVoxelPlanet } from "./VoxelPlanetCore";
 
 /**
  * 프로젝트에서 로드 가능한 시각화 테마 타입
@@ -103,6 +104,7 @@ export function useCodeCityViewer(
   const mtlLoaderRef = useRef(new MTLLoader());
   const gltfLoaderRef = useRef(new GLTFLoader());
   const starFieldRef = useRef<THREE.Points | null>(null);
+  const planetUpdateRef = useRef<((dt: number) => void) | null>(null);
 
   const { RADIUS: R, CENTER_Z: Cz } = PLANET_CONFIG;
   const themeCameraStatesRef = useRef<Record<string, { pos: any; lookAt: any; up: any }>>({});
@@ -750,37 +752,11 @@ export function useCodeCityViewer(
     }
     scene.add(starFieldRef.current);
 
-    // 6-2. 바닥(Ground Sphere / Planet Model) 생성
-    const p5Url = `/Themas/planet/planet5/planet5.gltf`;
-    loadModel(p5Url)
-      .then((obj) => {
-        const box = new THREE.Box3().setFromObject(obj);
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = (R * 2) / maxDim;
-
-        obj.scale.set(scale, scale, scale);
-        obj.position.set(0, 0, Cz);
-        obj.receiveShadow = true;
-        obj.traverse((c) => {
-          if ((c as THREE.Mesh).isMesh) {
-            (c as THREE.Mesh).receiveShadow = true;
-          }
-        });
-        scene.add(obj);
-      })
-      .catch((err) => {
-        console.error("❌ Planet model load failed:", err);
-        const groundGeo = new THREE.SphereGeometry(R, 64, 64);
-        const groundMat = new THREE.MeshStandardMaterial({
-          color: "#4d8b31",
-          roughness: 1,
-        });
-        const groundMesh = new THREE.Mesh(groundGeo, groundMat);
-        groundMesh.position.set(0, 0, Cz);
-        groundMesh.receiveShadow = true;
-        scene.add(groundMesh);
-      });
+    // 6-2. 바닥(Ground Sphere / Procedural Planet) 생성
+    const voxelPlanet = createVoxelPlanet({ seed: 1, radius: R });
+    voxelPlanet.group.position.set(0, 0, Cz);
+    scene.add(voxelPlanet.group);
+    planetUpdateRef.current = voxelPlanet.update;
 
     // 6-3. 조명 설정
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.45));
@@ -838,6 +814,10 @@ export function useCodeCityViewer(
           obj.quaternion.setFromRotationMatrix(m);
         }
       });
+      // 행성 애니메이션 (물, 구름)
+      if (planetUpdateRef.current) {
+        planetUpdateRef.current(0.016); // Approx 60fps dt
+      }
     };
     animate();
 

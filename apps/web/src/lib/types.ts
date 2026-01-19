@@ -273,6 +273,19 @@ export type CommitInfo = {
   files: CommitFile[];
 };
 
+export type SnapshotFile = {
+  language: string;
+  line_count: number;
+  depends_on: { target: string; type: string }[];
+};
+
+export type Snapshot = {
+  hash: string;
+  date: string;
+  impact: number;
+  files: Record<string, SnapshotFile>;
+};
+
 export type GraphStats = {
   nodeCount: number;
   edgeCount: number;
@@ -287,6 +300,7 @@ export type GraphData = {
   nodes: GraphNode[];
   edges: GraphEdge[];
   history?: CommitInfo[];
+  snapshots?: Snapshot[];
   stats?: GraphStats;
   metadata?: {
     repoUrl: string;

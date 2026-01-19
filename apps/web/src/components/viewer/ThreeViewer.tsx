@@ -109,12 +109,65 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
     if (historyIndex === -1 || !graphData.history || graphData.history.length === 0) {
       setActiveGraphData(graphData);
     } else {
-      const snapshot = graphData.history[historyIndex];
-      // Convert history snapshot to GraphData format if needed
-      // Assuming snapshot.files maps to nodes/edges
-      // For now, let's just keep the original structure if available
-      // If the backend returns full GraphData in history, it's easier.
-      // If not, we might need a transform function.
+      const targetCommit = graphData.history[historyIndex];
+      console.log("히스토리 인덱스 변경:", historyIndex);
+      console.log("대상 커밋 해시:", targetCommit.hash);
+
+      const snapshot = graphData.snapshots?.find((s) => s.hash === targetCommit.hash);
+      console.log("매칭된 스냅샷 찾음:", snapshot);
+
+      if (snapshot) {
+        // 스냅샷 파일 맵을 GraphNode[] 및 GraphEdge[] 형식으로 변환
+        const snapshotNodes = Object.entries(snapshot.files).map(([path, info]) => ({
+          id: path,
+          name: path.split("/").pop() || path,
+          path: path,
+          type: "file",
+          lines: info.line_count,
+          language: info.language,
+        }));
+
+        const snapshotEdges: any[] = [];
+        const nodeIds = new Set(snapshotNodes.map((n) => n.id));
+
+        Object.entries(snapshot.files).forEach(([sourcePath, info]) => {
+          info.depends_on.forEach((dep) => {
+            if (nodeIds.has(dep.target)) {
+              snapshotEdges.push({
+                source: sourcePath,
+                target: dep.target,
+                type: dep.type || "import",
+              });
+            }
+          });
+        });
+
+        // 관계 데이터(imports/importedBy) 계산 및 주입 (기존 로직과 동일)
+        const nodeMap = new Map<string, any>();
+        snapshotNodes.forEach((n: any) => {
+          n.imports = [];
+          n.importedBy = [];
+          nodeMap.set(n.id, n);
+        });
+
+        snapshotEdges.forEach((e: any) => {
+          if (nodeMap.has(e.source) && nodeMap.has(e.target)) {
+            nodeMap.get(e.source).imports.push(e.target);
+            nodeMap.get(e.target).importedBy.push(e.source);
+          }
+        });
+
+        setActiveGraphData({
+          ...graphData,
+          nodes: snapshotNodes,
+          edges: snapshotEdges,
+        });
+      } else {
+        console.warn("해당 커밋에 대한 스냅샷이 존재하지 않습니다.");
+        // 데이터가 없으면 빈 상태로 두지 않고 현재 데이터를 유지하거나 빈 그래프를 보여줄 수 있음
+        // 여기서는 안전하게 현재 노드들만 유지
+        setActiveGraphData(graphData);
+      }
     }
   }, [graphData, historyIndex]);
 
@@ -164,6 +217,10 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
         if (!graphRes.ok) throw new Error("Failed to fetch graph data");
 
         const data: GraphData = await graphRes.json();
+        console.log("그래프 데이터 로드 완료:", data);
+        if (data.snapshots) {
+          console.log("사용 가능한 스냅샷 개수:", data.snapshots.length);
+        }
 
         // [중요] 데이터를 받은 즉시 의존성 관계(imports/importedBy) 계산 및 주입
         // 이를 통해 사이드바나 검색 결과에서 안정적으로 관계 데이터를 사용할 수 있음
@@ -302,14 +359,24 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
               {historyIndex === -1 ? "Initial layout" : graphData.history[historyIndex].message}
             </span>
           </div>
-          <input
-            type="range"
-            min="-1"
-            max={graphData.history.length - 1}
-            value={historyIndex}
-            onChange={(e) => setHistoryIndex(parseInt(e.target.value))}
-            className="history-slider"
-          />
+          {(() => {
+            const history = graphData.history;
+            const L = history.length;
+            const sliderValue = historyIndex === -1 ? L : (L - 1) - historyIndex;
+            return (
+              <input
+                type="range"
+                min="0"
+                max={L}
+                value={sliderValue}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setHistoryIndex(val === L ? -1 : (L - 1) - val);
+                }}
+                className="history-slider"
+              />
+            );
+          })()}
         </div>
       )}
 
