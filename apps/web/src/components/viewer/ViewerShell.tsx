@@ -108,11 +108,10 @@ export function ViewerShell({ projectId }: { projectId: string }) {
                 {data.status}
               </span>
               {jobStatus && (
-                <span className={`rounded-full px-2 py-0.5 text-xs ${
-                  isJobDone
+                <span className={`rounded-full px-2 py-0.5 text-xs ${isJobDone
                     ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
                     : "border border-neutral-300 bg-white text-neutral-600"
-                }`}>
+                  }`}>
                   Job: {jobStatus}
                 </span>
               )}
@@ -137,19 +136,12 @@ export function ViewerShell({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="grid h-[calc(100dvh-64px)] grid-cols-1 lg:grid-cols-[1fr_380px]">
+      <div className="relative h-[calc(100dvh-64px)] w-full overflow-hidden">
         <ThreeViewer
           project={data}
           loading={loading}
           theme={theme}
           onThemeChange={setTheme}
-        />
-        <ControlsPanel
-          project={data}
-          theme={theme}
-          onThemeChange={setTheme}
-          saving={saving}
-          onSave={saveConfig}
         />
       </div>
 
