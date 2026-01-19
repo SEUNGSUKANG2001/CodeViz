@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import type { ProjectDetailResponse } from "@/lib/types";
-import { ThreeViewer, type SelectedNode } from "@/components/viewer/ThreeViewer";
+import { ThreeViewer } from "@/components/viewer/ThreeViewer";
 import { ControlsPanel } from "@/components/viewer/ControlsPanel";
 import { PublishDialog } from "@/components/modals/PublishDialog";
 import type { ThemeType } from "./useCodeCityViewer";
@@ -17,7 +17,6 @@ export function ViewerShell({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeType>("Thema1");
   const [saving, setSaving] = useState(false);
-  const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
 
   const fetchProject = useCallback(async () => {
     try {
@@ -109,11 +108,10 @@ export function ViewerShell({ projectId }: { projectId: string }) {
                 {data.status}
               </span>
               {jobStatus && (
-                <span className={`rounded-full px-2 py-0.5 text-xs ${
-                  isJobDone
-                    ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                    : "border border-neutral-300 bg-white text-neutral-600"
-                }`}>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${isJobDone
+                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                  : "border border-neutral-300 bg-white text-neutral-600"
+                  }`}>
                   Job: {jobStatus}
                 </span>
               )}
@@ -138,21 +136,12 @@ export function ViewerShell({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="grid h-[calc(100dvh-64px)] grid-cols-1 md:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="relative h-[calc(100dvh-64px)] w-full overflow-hidden">
         <ThreeViewer
           project={data}
           loading={loading}
           theme={theme}
           onThemeChange={setTheme}
-          onNodeSelect={setSelectedNode}
-        />
-        <ControlsPanel
-          project={data}
-          theme={theme}
-          onThemeChange={setTheme}
-          saving={saving}
-          onSave={saveConfig}
-          selectedNode={selectedNode}
         />
       </div>
 
