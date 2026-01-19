@@ -1,10 +1,17 @@
 import type { ProjectCard as ProjectCardT } from "@/lib/types";
+import dynamic from "next/dynamic";
+
+const GraphThumbnail = dynamic(
+  () => import("@/components/viewer/GraphThumbnail").then((m) => m.GraphThumbnail),
+  { ssr: false }
+);
 
 type Props = {
   item: ProjectCardT;
 };
 
 export function ProjectCard({ item }: Props) {
+  const theme = (item.currentConfig?.theme as "Thema1" | "Thema2" | "Thema3") || "Thema1";
   const statusStyles = {
     ready: "bg-indigo-50 text-indigo-700 border-indigo-200",
     error: "bg-red-50 text-red-700 border-red-200",
@@ -13,24 +20,16 @@ export function ProjectCard({ item }: Props) {
 
   return (
     <div className="group block">
-      <div className="overflow-hidden rounded-2xl bg-neutral-100">
-        <div className="aspect-[4/3] w-full">
-          {item.coverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.coverUrl}
-              alt={item.title}
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-            />
-          ) : (
-            <div
-              className="h-full w-full transition duration-500 group-hover:scale-[1.03]"
-              style={{
-                backgroundImage:
-                  "radial-gradient(circle at 35% 40%, rgba(79,70,229,0.16), transparent 50%), radial-gradient(circle at 70% 65%, rgba(0,0,0,0.10), transparent 52%), linear-gradient(135deg, rgba(255,255,255,0.86), rgba(255,255,255,0))",
-              }}
-            />
-          )}
+      <div className="overflow-hidden rounded-none bg-neutral-100">
+        <div className="relative aspect-[4/3] w-full">
+          <GraphThumbnail
+            jobId={item.latestJob?.id ?? null}
+            jobStatus={item.latestJob?.status ?? null}
+            coverUrl={item.coverUrl}
+            title={item.title}
+            theme={theme}
+            className="absolute inset-0"
+          />
         </div>
       </div>
 

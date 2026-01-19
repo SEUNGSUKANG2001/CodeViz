@@ -6,10 +6,15 @@ export type Author = {
   avatarUrl?: string | null;
 };
 
+export type JobStatus = "queued" | "running" | "done" | "failed" | "canceled";
+
 export type PostCard = {
   postId: string;
   title: string;
   coverUrl?: string | null;
+  jobId?: string | null;
+  jobStatus?: JobStatus | null;
+  theme?: string | null;
   author: Author;
   likeCount: number;
   commentCount: number;
@@ -31,6 +36,11 @@ export type ProjectCard = {
   repoUrl: string;
   ref: string | null;
   coverUrl?: string | null;
+  latestJob?: {
+    id: string;
+    status: JobStatus;
+  } | null;
+  currentConfig?: Record<string, unknown>;
   status: "draft" | "ready" | "error";
   updatedAt: string;
 };

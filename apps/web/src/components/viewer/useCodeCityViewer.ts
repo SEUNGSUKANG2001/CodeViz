@@ -145,6 +145,17 @@ export function useCodeCityViewer(
       nodeMap.get(e.target)!.importedBy.push(e.source);
     });
 
+    const clusterRadius = 500;
+    nodes.forEach((node) => {
+      if (node.imports.length === 0 && node.importedBy.length === 0) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * clusterRadius;
+        node.x = Math.cos(angle) * radius;
+        node.y = Math.sin(angle) * radius;
+        node.z = PLANET_CONFIG.CENTER_Z + PLANET_CONFIG.RADIUS;
+      }
+    });
+
     return { nodes, links };
   }, []);
 
@@ -274,9 +285,6 @@ export function useCodeCityViewer(
       .backgroundColor("#87CEEB")
       .nodeThreeObject((node: CityNode) => {
         const group = new THREE.Group();
-        const pivot = new THREE.Group();
-        pivot.rotation.x = Math.PI / 2;
-        group.add(pivot);
         const scale = Math.max(12, Math.log(node.lineCount || 10) * 12);
 
         const charCode = THEME_CONFIG[themeRef.current].lastBuilding.charCodeAt(0);
@@ -289,8 +297,9 @@ export function useCodeCityViewer(
         const bUrl = buildings[Math.floor(Math.random() * buildings.length)];
         loadOBJ(bUrl)
           .then((obj) => {
+            obj.rotation.x = Math.PI / 2;
             obj.scale.set(scale, scale, scale);
-            pivot.add(obj);
+            group.add(obj);
           })
           .catch((err) => console.error(`Failed building load (${bUrl}):`, err));
 
@@ -304,9 +313,8 @@ export function useCodeCityViewer(
         opts?.onBackgroundClick?.();
       });
 
-    Graph.d3Force("charge")?.strength(-300);
-    Graph.d3Force("link")?.distance(150);
-    Graph.d3Force("center", null);
+    Graph.d3Force("charge")?.strength(-140);
+    Graph.d3Force("link")?.distance(120);
 
     const R = PLANET_CONFIG.RADIUS;
     const Cz = PLANET_CONFIG.CENTER_Z;
@@ -356,6 +364,8 @@ export function useCodeCityViewer(
       });
 
     // Project nodes onto sphere surface (연구용 코드와 동일)
+    const modelUp = new THREE.Vector3(0, 0, 1);
+    const cityNormal = new THREE.Vector3(0, 1, 0);
     Graph.onEngineTick(() => {
       const nodes = Graph.graphData().nodes as CityNode[];
       nodes.forEach((n) => {
@@ -363,16 +373,17 @@ export function useCodeCityViewer(
         const dy = n.y;
         const dz = n.z - Cz;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-        const ratio = R / dist;
-        n.x = dx * ratio;
-        n.y = dy * ratio;
-        n.z = dz * ratio + Cz;
+        let normal = new THREE.Vector3(dx, dy, dz).multiplyScalar(1 / dist);
+        if (n.imports.length === 0 && n.importedBy.length === 0) {
+          normal = normal.lerp(cityNormal, 0.08).normalize();
+        }
+        n.x = normal.x * R;
+        n.y = normal.y * R;
+        n.z = normal.z * R + Cz;
 
         const obj = (n as any).__threeObj as THREE.Object3D | undefined;
         if (obj) {
-          const normal = new THREE.Vector3(n.x, n.y, n.z - Cz).normalize();
-          const up = new THREE.Vector3(0, 1, 0);
-          obj.quaternion.setFromUnitVectors(up, normal);
+          obj.quaternion.setFromUnitVectors(modelUp, normal);
         }
       });
     });
@@ -392,6 +403,7 @@ export function useCodeCityViewer(
     scene.add(dirLight);
 
     Graph.cameraPosition({ x: 0, y: R * 1.5, z: Cz + R * 1.5 }, { x: 0, y: 0, z: Cz }, 0);
+    Graph.width(el.clientWidth).height(el.clientHeight);
 
     // character animate
     let raf = 0;

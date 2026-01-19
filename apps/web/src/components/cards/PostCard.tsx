@@ -1,27 +1,25 @@
-import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { PostCard as PostCardT } from "@/lib/types";
 
+const GraphThumbnail = dynamic(
+  () => import("@/components/viewer/GraphThumbnail").then((m) => m.GraphThumbnail),
+  { ssr: false }
+);
+
 export function PostCard({ item }: { item: PostCardT }) {
+  const theme = (item.theme as "Thema1" | "Thema2" | "Thema3") || "Thema1";
   return (
     <div className="group block">
-      <div className="overflow-hidden rounded-2xl bg-neutral-100">
-        <div className="aspect-[4/3] w-full">
-          {item.coverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.coverUrl}
-              alt={item.title}
-              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-            />
-          ) : (
-            <div
-              className="h-full w-full transition duration-500 group-hover:scale-[1.03]"
-              style={{
-                backgroundImage:
-                  "radial-gradient(circle at 35% 40%, rgba(79,70,229,0.16), transparent 50%), radial-gradient(circle at 70% 65%, rgba(0,0,0,0.10), transparent 52%), linear-gradient(135deg, rgba(255,255,255,0.86), rgba(255,255,255,0))",
-              }}
-            />
-          )}
+      <div className="overflow-hidden rounded-none bg-neutral-100">
+        <div className="relative aspect-[4/3] w-full">
+          <GraphThumbnail
+            jobId={item.jobId ?? null}
+            jobStatus={item.jobStatus ?? null}
+            coverUrl={item.coverUrl}
+            title={item.title}
+            theme={theme}
+            className="absolute inset-0"
+          />
         </div>
       </div>
 

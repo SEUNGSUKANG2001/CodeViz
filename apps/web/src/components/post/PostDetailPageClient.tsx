@@ -5,14 +5,17 @@ import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import type { PostDetail, PostDetailResponse } from "@/lib/types";
 import { TopNav } from "@/components/nav/TopNav";
-import { RightActionBar } from "@/components/post/RightActionBar";
 import { Comments } from "@/components/post/Comments";
+import { RightActionBar } from "@/components/post/RightActionBar";
+import { PostVisualization } from "@/components/post/PostVisualization";
+import type { ThemeType } from "@/components/viewer/useCodeCityViewer";
 
 export function PostDetailPageClient({ postId }: { postId: string }) {
   const [post, setPost] = useState<PostDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   const authorHref = useMemo(() => (post ? `/u/${post.author.id}` : "#"), [post]);
+  const theme = (post?.snapshot.config?.theme as ThemeType) || "Thema1";
 
   useEffect(() => {
     (async () => {
@@ -123,25 +126,14 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
               </header>
 
               {/* Visualization */}
-              <div className="mt-10 overflow-hidden rounded-2xl bg-neutral-100">
-                <div className="aspect-[16/9]">
-                  {post.snapshot.coverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={post.snapshot.coverUrl}
-                      alt={post.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="h-full w-full"
-                      style={{
-                        backgroundImage:
-                          "radial-gradient(circle at 35% 40%, rgba(79,70,229,0.16), transparent 50%), radial-gradient(circle at 70% 65%, rgba(0,0,0,0.10), transparent 52%), linear-gradient(135deg, rgba(255,255,255,0.86), rgba(255,255,255,0))",
-                      }}
-                    />
-                  )}
-                </div>
+              <div className="mt-10">
+                <PostVisualization
+                  jobId={post.snapshot.job?.id ?? null}
+                  jobStatus={post.snapshot.job?.status ?? null}
+                  coverUrl={post.snapshot.coverUrl}
+                  title={post.title}
+                  theme={theme}
+                />
               </div>
 
               {/* Body */}

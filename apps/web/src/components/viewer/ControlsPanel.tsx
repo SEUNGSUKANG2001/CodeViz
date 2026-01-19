@@ -27,9 +27,22 @@ type Props = {
   onThemeChange: (theme: ThemeType) => void;
   saving?: boolean;
   onSave?: () => void;
+  selectedNode?: {
+    id: string;
+    lineCount: number;
+    imports: string[];
+    importedBy: string[];
+  } | null;
 };
 
-export function ControlsPanel({ project, theme, onThemeChange, saving, onSave }: Props) {
+export function ControlsPanel({
+  project,
+  theme,
+  onThemeChange,
+  saving,
+  onSave,
+  selectedNode,
+}: Props) {
   const stats = project?.latestJob?.result?.stats as StatsData | undefined;
 
   const formatLabel = (key: string) => {
@@ -66,6 +79,50 @@ export function ControlsPanel({ project, theme, onThemeChange, saving, onSave }:
 
   return (
     <aside className="overflow-y-auto border-l border-neutral-100 bg-white p-6 space-y-8">
+      {selectedNode && (
+        <div>
+          <div className="text-[11px] tracking-[0.18em] text-neutral-400 mb-4">SELECTION</div>
+          <div className="rounded-xl bg-neutral-50 px-4 py-3">
+            <div className="text-sm font-semibold text-neutral-800 break-all">
+              {selectedNode.id.split("/").pop()}
+            </div>
+            <div className="mt-1 text-xs text-neutral-500 break-all">{selectedNode.id}</div>
+            <div className="mt-3 text-xs text-neutral-500">
+              Lines: <span className="text-neutral-700">{selectedNode.lineCount.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="text-[10px] text-neutral-500 uppercase mb-2">Imports</div>
+            <ul className="space-y-1 text-xs text-neutral-600">
+              {selectedNode.imports.length === 0 ? (
+                <li className="text-neutral-400">(None)</li>
+              ) : (
+                selectedNode.imports.slice(0, 8).map((item) => (
+                  <li key={item} className="break-all">
+                    {item.split("/").pop()}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+
+          <div className="mt-4">
+            <div className="text-[10px] text-neutral-500 uppercase mb-2">Used By</div>
+            <ul className="space-y-1 text-xs text-neutral-600">
+              {selectedNode.importedBy.length === 0 ? (
+                <li className="text-neutral-400">(None)</li>
+              ) : (
+                selectedNode.importedBy.slice(0, 8).map((item) => (
+                  <li key={item} className="break-all">
+                    {item.split("/").pop()}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
       <div>
         <div className="text-[11px] tracking-[0.18em] text-neutral-400 mb-4">SCENE</div>
         <div className="grid grid-cols-3 gap-2">

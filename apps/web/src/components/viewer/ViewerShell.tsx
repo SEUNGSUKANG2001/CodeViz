@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import type { ProjectDetailResponse } from "@/lib/types";
-import { ThreeViewer } from "@/components/viewer/ThreeViewer";
+import { ThreeViewer, type SelectedNode } from "@/components/viewer/ThreeViewer";
 import { ControlsPanel } from "@/components/viewer/ControlsPanel";
 import { PublishDialog } from "@/components/modals/PublishDialog";
 import type { ThemeType } from "./useCodeCityViewer";
@@ -17,6 +17,7 @@ export function ViewerShell({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeType>("Thema1");
   const [saving, setSaving] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
 
   const fetchProject = useCallback(async () => {
     try {
@@ -137,12 +138,13 @@ export function ViewerShell({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="grid h-[calc(100dvh-64px)] grid-cols-1 lg:grid-cols-[1fr_380px]">
+      <div className="grid h-[calc(100dvh-64px)] grid-cols-1 md:grid-cols-[minmax(0,1fr)_360px]">
         <ThreeViewer
           project={data}
           loading={loading}
           theme={theme}
           onThemeChange={setTheme}
+          onNodeSelect={setSelectedNode}
         />
         <ControlsPanel
           project={data}
@@ -150,6 +152,7 @@ export function ViewerShell({ projectId }: { projectId: string }) {
           onThemeChange={setTheme}
           saving={saving}
           onSave={saveConfig}
+          selectedNode={selectedNode}
         />
       </div>
 

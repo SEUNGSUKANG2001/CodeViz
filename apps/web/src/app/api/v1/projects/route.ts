@@ -106,6 +106,12 @@ export async function GET(request: NextRequest) {
 
   const projects = await prisma.project.findMany({
     where: whereClause,
+    include: {
+      jobs: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
     orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
   });

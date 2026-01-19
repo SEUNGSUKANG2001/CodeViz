@@ -17,13 +17,16 @@ export function formatJob(job: AnalysisJob) {
   };
 }
 
-export function formatProjectCard(project: Project) {
+export function formatProjectCard(project: Project & { jobs?: AnalysisJob[] }) {
+  const latestJob = project.jobs?.[0];
   return {
     id: project.id,
     title: project.title,
     repoUrl: project.repoUrl,
     ref: project.ref,
     coverUrl: project.coverUrl,
+    latestJob: latestJob ? formatJob(latestJob) : null,
+    currentConfig: project.currentConfig,
     status: project.status,
     updatedAt: project.updatedAt.toISOString(),
   };
@@ -82,12 +85,15 @@ export function formatUserProfile(user: Pick<User, 'id' | 'username' | 'displayN
 
 export function formatPostCard(
   post: Post & { author: User; _count: { likes: number; comments: number } },
-  coverUrl?: string | null
+  snapshot?: Snapshot & { job?: AnalysisJob | null }
 ) {
   return {
     postId: post.id,
     title: post.title,
-    coverUrl: coverUrl ?? null,
+    coverUrl: snapshot?.coverUrl ?? null,
+    jobId: snapshot?.job?.id ?? snapshot?.jobId ?? null,
+    jobStatus: snapshot?.job?.status ?? null,
+    theme: (snapshot?.config as Record<string, unknown> | null)?.theme as string | null,
     author: formatUserSummary(post.author),
     likeCount: post._count.likes,
     commentCount: post._count.comments,

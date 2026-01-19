@@ -40,7 +40,11 @@ export async function GET(request: NextRequest) {
     where: whereClause,
     include: {
       author: true,
-      snapshot: true,
+      snapshot: {
+        include: {
+          job: true,
+        },
+      },
       _count: {
         select: {
           likes: true,
@@ -61,7 +65,7 @@ export async function GET(request: NextRequest) {
       : null;
 
   const formattedItems = items.map((post) => {
-    return formatPostCard(post, post.snapshot.coverUrl);
+    return formatPostCard(post, post.snapshot);
   });
 
   return successResponse({

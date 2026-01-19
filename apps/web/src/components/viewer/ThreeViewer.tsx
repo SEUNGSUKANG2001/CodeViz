@@ -10,9 +10,23 @@ type Props = {
   loading?: boolean;
   theme?: ThemeType;
   onThemeChange?: (theme: ThemeType) => void;
+  onNodeSelect?: (node: SelectedNode | null) => void;
 };
 
-export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange }: Props) {
+export type SelectedNode = {
+  id: string;
+  lineCount: number;
+  imports: string[];
+  importedBy: string[];
+};
+
+export function ThreeViewer({
+  project,
+  loading,
+  theme = "Thema1",
+  onThemeChange,
+  onNodeSelect,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
@@ -27,7 +41,20 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
   const { resetCamera } = useCodeCityViewer(
     containerRef,
     viewerReady ? graphData : null,
-    { theme }
+    {
+      theme,
+      onNodeClick: (node) => {
+        onNodeSelect?.({
+          id: node.id,
+          lineCount: node.lineCount || 0,
+          imports: node.imports ?? [],
+          importedBy: node.importedBy ?? [],
+        });
+      },
+      onBackgroundClick: () => {
+        onNodeSelect?.(null);
+      },
+    }
   );
 
   // Fetch graph data when job is done
@@ -87,7 +114,7 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
     !graphData;
 
   return (
-    <div className="relative h-full bg-[#87CEEB]">
+    <div className="relative h-full min-w-0 bg-[#87CEEB]">
       {/* 3D Viewer Container */}
       <div
         ref={containerRef}

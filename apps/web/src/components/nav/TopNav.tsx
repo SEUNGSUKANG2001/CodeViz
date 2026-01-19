@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type Props = {
   isAuthed?: boolean;
 };
 
 export function TopNav({ isAuthed }: Props) {
+  const router = useRouter();
   return (
     <header className="relative z-20 w-full px-10 py-7">
       <div className="mx-auto flex max-w-[1600px] items-center justify-between">
@@ -36,7 +38,7 @@ export function TopNav({ isAuthed }: Props) {
           ) : (
             <button
               onClick={() => {
-                window.location.href = "/api/v1/auth/kakao/start";
+                router.push("/api/v1/auth/kakao/start");
               }}
               className="rounded-full bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-800"
             >
