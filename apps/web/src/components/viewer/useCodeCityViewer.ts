@@ -1,307 +1,463 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import type { GraphData, GraphNode } from "@/lib/types";
+import { useCallback, useEffect, useRef } from "react";
+import * as THREE from "three";
+import ForceGraph3D from "3d-force-graph";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
+import type { GraphData } from "@/lib/types";
 
-// Extended types for visualization
 export type ThemeType = "Thema1" | "Thema2" | "Thema3";
 
-export type ViewerConfig = {
-  theme: ThemeType;
-  sphereRadius: number;
-  buildingScale: number;
-  showLabels: boolean;
+const THEME_CONFIG: Record<ThemeType, { character: string; lastBuilding: string }> = {
+  Thema1: { character: "oobi", lastBuilding: "n" },
+  Thema2: { character: "oozi", lastBuilding: "t" },
+  Thema3: { character: "ooli", lastBuilding: "p" },
 };
 
-const DEFAULT_CONFIG: ViewerConfig = {
-  theme: "Thema1",
-  sphereRadius: 200,
-  buildingScale: 1,
-  showLabels: true,
+const PLANET_CONFIG = {
+  RADIUS: 4000,
+  CENTER_Z: -4000,
 };
 
-// Color mapping for file languages
-const LANGUAGE_COLORS: Record<string, string> = {
-  typescript: "#3178c6",
-  javascript: "#f7df1e",
-  python: "#3776ab",
-  java: "#007396",
-  kotlin: "#7f52ff",
-  cpp: "#00599c",
-  c: "#a8b9cc",
-  go: "#00add8",
-  rust: "#dea584",
-  ruby: "#cc342d",
-  php: "#777bb4",
-  swift: "#f05138",
-  default: "#6366f1",
+type CityNode = {
+  id: string;
+  lineCount: number;
+  imports: string[];
+  importedBy: string[];
+  x: number;
+  y: number;
+  z: number;
+};
+
+type CityLink = {
+  source: CityNode | string;
+  target: CityNode | string;
+};
+
+type CityGraphData = {
+  nodes: CityNode[];
+  links: CityLink[];
 };
 
 export function useCodeCityViewer(
-  containerRef: React.RefObject<HTMLDivElement>,
+  containerRef: React.RefObject<HTMLDivElement | null>,
   graphData: GraphData | null,
-  config: Partial<ViewerConfig> = {}
+  opts?: {
+    theme?: ThemeType;
+    onNodeClick?: (node: CityNode) => void;
+    onBackgroundClick?: () => void;
+  }
 ) {
+  const themeRef = useRef<ThemeType>(opts?.theme ?? "Thema1");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graphRef = useRef<any>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
-  const mergedConfig = { ...DEFAULT_CONFIG, ...config };
 
-  const initViewer = useCallback(async () => {
+  const OBJ_CACHE = useRef<Record<string, THREE.Object3D>>({});
+  const CHARACTER_MODEL = useRef<THREE.Group | null>(null);
+
+  const objLoaderRef = useRef(new OBJLoader());
+  const mtlLoaderRef = useRef(new MTLLoader());
+
+  const cityDataRef = useRef<CityGraphData | null>(null);
+
+  const loadOBJ = useCallback(async (url: string): Promise<THREE.Object3D> => {
+    if (OBJ_CACHE.current[url]) return OBJ_CACHE.current[url].clone();
+
+    return new Promise((resolve, reject) => {
+      const mtlUrl = url.replace(".obj", ".mtl");
+      const baseUrl = url.substring(0, url.lastIndexOf("/") + 1);
+      const fileName = url.split("/").pop() || "";
+      const mtlFileName = mtlUrl.split("/").pop() || "";
+
+      const mtlLoader = mtlLoaderRef.current;
+      const objLoader = objLoaderRef.current;
+
+      mtlLoader.setPath(baseUrl);
+      mtlLoader.load(
+        mtlFileName,
+        (mtl) => {
+          mtl.preload();
+          objLoader.setMaterials(mtl);
+          objLoader.setPath(baseUrl);
+          objLoader.load(
+            fileName,
+            (obj) => {
+              OBJ_CACHE.current[url] = obj;
+              resolve(obj.clone());
+            },
+            undefined,
+            reject
+          );
+        },
+        undefined,
+        () => {
+          // MTL failed, fallback to OBJ-only
+          objLoader.setMaterials(null as any);
+          objLoader.setPath(baseUrl);
+          objLoader.load(
+            fileName,
+            (obj) => {
+              obj.traverse((c) => {
+                if ((c as THREE.Mesh).isMesh) {
+                  (c as THREE.Mesh).material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
+                }
+              });
+              OBJ_CACHE.current[url] = obj;
+              resolve(obj.clone());
+            },
+            undefined,
+            reject
+          );
+        }
+      );
+    });
+  }, []);
+
+  const buildCityData = useCallback((data: GraphData): CityGraphData => {
+    const nodes: CityNode[] = [];
+    const links: CityLink[] = [];
+
+    const nodeMap = new Map<string, CityNode>();
+    const sourceNodes = data.nodes.filter((n) => n.type === "file");
+
+    sourceNodes.forEach((n) => {
+      const node: CityNode = {
+        id: n.id,
+        lineCount: n.lines || n.loc || 10,
+        imports: [],
+        importedBy: [],
+        x: 0,
+        y: 0,
+        z: 0,
+      };
+      nodeMap.set(n.id, node);
+      nodes.push(node);
+    });
+
+    data.edges.forEach((e) => {
+      if (!nodeMap.has(e.source) || !nodeMap.has(e.target)) return;
+      links.push({ source: e.source, target: e.target });
+
+      nodeMap.get(e.source)!.imports.push(e.target);
+      nodeMap.get(e.target)!.importedBy.push(e.source);
+    });
+
+    return { nodes, links };
+  }, []);
+
+  const getCurve = useCallback((start: any, end: any) => {
+    const R = PLANET_CONFIG.RADIUS;
+    const Cz = PLANET_CONFIG.CENTER_Z;
+
+    const mx = (start.x + end.x) / 2;
+    const my = (start.y + end.y) / 2;
+    const mz = (start.z + end.z) / 2;
+
+    const cx = mx;
+    const cy = my;
+    const cz = mz - Cz;
+
+    const dist = Math.sqrt(cx * cx + cy * cy + cz * cz) || 1;
+    const chordDist = Math.hypot(start.x - end.x, start.y - end.y, start.z - end.z);
+
+    const height = R + 2 + chordDist * 0.01;
+    const ratio = height / dist;
+
+    const cpx = cx * ratio;
+    const cpy = cy * ratio;
+    const cpz = cz * ratio + Cz;
+
+    return new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(start.x, start.y, start.z),
+      new THREE.Vector3(cpx, cpy, cpz),
+      new THREE.Vector3(end.x, end.y, end.z)
+    );
+  }, []);
+
+  const changeTheme = useCallback(
+    async (theme: ThemeType) => {
+      if (!THEME_CONFIG[theme]) return;
+      themeRef.current = theme;
+
+      const charPath = `/Themas/${theme}/character-${THEME_CONFIG[theme].character}.obj`;
+
+      try {
+        const charObj = await loadOBJ(charPath);
+        const box = new THREE.Box3().setFromObject(charObj);
+        const size = box.getSize(new THREE.Vector3());
+        const scale = 7.5 / (Math.max(size.x, size.y, size.z) || 1);
+        charObj.scale.set(scale, scale, scale);
+
+        const g = new THREE.Group();
+        g.add(charObj);
+        CHARACTER_MODEL.current = g;
+      } catch (e) {
+        console.error("Failed to load character:", e);
+      }
+
+      if (graphRef.current) {
+        graphRef.current.nodeThreeObject(graphRef.current.nodeThreeObject());
+        graphRef.current.linkThreeObject(graphRef.current.linkThreeObject());
+      }
+    },
+    [loadOBJ]
+  );
+
+  const focusOnNode = useCallback((node: CityNode) => {
+    if (!graphRef.current) return;
+
+    const R = PLANET_CONFIG.RADIUS;
+    const Cz = PLANET_CONFIG.CENTER_Z;
+
+    const center = new THREE.Vector3(0, 0, Cz);
+    const nodePos = new THREE.Vector3(node.x, node.y, node.z);
+    const normal = new THREE.Vector3().subVectors(nodePos, center).normalize();
+
+    const globalUp = new THREE.Vector3(0, 1, 0);
+    let north = new THREE.Vector3().copy(globalUp).projectOnPlane(normal).normalize();
+    if (north.lengthSq() < 0.001) {
+      north.set(0, 0, 1).projectOnPlane(normal).normalize();
+    }
+    const south = north.clone().negate();
+
+    const dist = 800;
+    const camPos = nodePos.clone()
+      .add(normal.clone().multiplyScalar(dist))
+      .add(south.clone().multiplyScalar(dist));
+
+    const camera = graphRef.current.camera();
+    camera.up.copy(normal);
+
+    graphRef.current.cameraPosition(
+      { x: camPos.x, y: camPos.y, z: camPos.z },
+      node,
+      1500
+    );
+  }, []);
+
+  const resetCamera = useCallback(() => {
+    if (!graphRef.current) return;
+    const R = PLANET_CONFIG.RADIUS;
+    const Cz = PLANET_CONFIG.CENTER_Z;
+
+    graphRef.current.cameraPosition(
+      { x: 0, y: R * 1.5, z: Cz + R * 1.5 },
+      { x: 0, y: 0, z: Cz },
+      1500
+    );
+  }, []);
+
+  const init = useCallback(async () => {
     if (!containerRef.current || !graphData) return;
 
-    // Dynamic import to avoid SSR issues
-    const ForceGraph3DModule = await import("3d-force-graph");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ForceGraph3D = ForceGraph3DModule.default as any;
-    const THREE = await import("three");
+    // ✅ container가 0x0이면 ForceGraph가 망가짐 -> 방지
+    const el = containerRef.current;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 10 || rect.height < 10) return;
 
-    // Clean up previous instance
-    if (cleanupRef.current) {
-      cleanupRef.current();
-    }
+    // cleanup previous
+    cleanupRef.current?.();
 
-    const container = containerRef.current;
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    // theme/character preload
+    await changeTheme(themeRef.current);
 
-    // Build node map for quick lookup
-    const nodeMap = new Map<string, GraphNode>();
-    graphData.nodes.forEach((node) => nodeMap.set(node.id, node));
+    const cityData = buildCityData(graphData);
+    cityDataRef.current = cityData;
 
-    // Calculate node positions on sphere
-    const fileNodes = graphData.nodes.filter((n) => n.type === "file");
-    const dirNodes = graphData.nodes.filter((n) => n.type === "directory");
+    // init graph
+    const ForceGraph3DAny = ForceGraph3D as any;
+    const Graph = ForceGraph3DAny()(el)
+      .graphData(cityData)
+      .backgroundColor("#87CEEB")
+      .nodeThreeObject((node: CityNode) => {
+        const group = new THREE.Group();
+        const pivot = new THREE.Group();
+        pivot.rotation.x = Math.PI / 2;
+        group.add(pivot);
+        const scale = Math.max(12, Math.log(node.lineCount || 10) * 12);
 
-    // Position nodes using Fibonacci sphere distribution
-    const positionNodes = (nodes: GraphNode[], radius: number) => {
-      const positions = new Map<string, { x: number; y: number; z: number }>();
-      const goldenRatio = (1 + Math.sqrt(5)) / 2;
+        const charCode = THEME_CONFIG[themeRef.current].lastBuilding.charCodeAt(0);
+        const startCode = "a".charCodeAt(0);
+        const buildings: string[] = [];
+        for (let i = startCode; i <= charCode; i++) {
+          buildings.push(`/Themas/${themeRef.current}/building-${String.fromCharCode(i)}.obj`);
+        }
 
-      nodes.forEach((node, i) => {
-        const theta = (2 * Math.PI * i) / goldenRatio;
-        const phi = Math.acos(1 - (2 * (i + 0.5)) / nodes.length);
+        const bUrl = buildings[Math.floor(Math.random() * buildings.length)];
+        loadOBJ(bUrl)
+          .then((obj) => {
+            obj.scale.set(scale, scale, scale);
+            pivot.add(obj);
+          })
+          .catch((err) => console.error(`Failed building load (${bUrl}):`, err));
 
-        positions.set(node.id, {
-          x: radius * Math.sin(phi) * Math.cos(theta),
-          y: radius * Math.sin(phi) * Math.sin(theta),
-          z: radius * Math.cos(phi),
-        });
+        return group;
+      })
+      .onNodeClick((node: CityNode) => {
+        focusOnNode(node);
+        opts?.onNodeClick?.(node);
+      })
+      .onBackgroundClick(() => {
+        opts?.onBackgroundClick?.();
       });
 
-      return positions;
+    Graph.d3Force("charge")?.strength(-300);
+    Graph.d3Force("link")?.distance(150);
+    Graph.d3Force("center", null);
+
+    const R = PLANET_CONFIG.RADIUS;
+    const Cz = PLANET_CONFIG.CENTER_Z;
+
+    Graph.linkThreeObjectExtend(true)
+      .linkThreeObject((link: CityLink) => {
+        const group = new THREE.Group();
+        (group as any).userData.link = link;
+
+        if (Math.random() <= 0.6 && CHARACTER_MODEL.current) {
+          const obj = CHARACTER_MODEL.current.clone();
+          obj.up.set(0, 0, 1);
+          (obj as any).userData = {
+            offset: Math.random() * 10000,
+            isCharacter: true,
+            linkData: link,
+          };
+          group.add(obj);
+        }
+
+        const curve = new THREE.QuadraticBezierCurve3(
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0, 0)
+        );
+        const geometry = new THREE.TubeGeometry(curve, 10, 2, 6, false);
+        const material = new THREE.MeshBasicMaterial({
+          color: 0x1a1a1a,
+          transparent: true,
+          opacity: 0.8,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        (mesh as any).userData = { isRoad: true };
+        group.add(mesh);
+
+        return group;
+      })
+      .linkPositionUpdate((obj: THREE.Object3D, { start, end }: any) => {
+        if (!start || !end) return;
+        const roadMesh = obj.children.find((c) => (c as any).userData?.isRoad) as THREE.Mesh | undefined;
+        if (roadMesh) {
+          const curve = getCurve(start, end);
+          roadMesh.geometry.dispose();
+          roadMesh.geometry = new THREE.TubeGeometry(curve, 10, 2, 6, false);
+        }
+        return false;
+      });
+
+    // Project nodes onto sphere surface (연구용 코드와 동일)
+    Graph.onEngineTick(() => {
+      const nodes = Graph.graphData().nodes as CityNode[];
+      nodes.forEach((n) => {
+        const dx = n.x;
+        const dy = n.y;
+        const dz = n.z - Cz;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+        const ratio = R / dist;
+        n.x = dx * ratio;
+        n.y = dy * ratio;
+        n.z = dz * ratio + Cz;
+
+        const obj = (n as any).__threeObj as THREE.Object3D | undefined;
+        if (obj) {
+          const normal = new THREE.Vector3(n.x, n.y, n.z - Cz).normalize();
+          const up = new THREE.Vector3(0, 1, 0);
+          obj.quaternion.setFromUnitVectors(up, normal);
+        }
+      });
+    });
+
+    // planet + lights
+    const scene = Graph.scene();
+    const sphereGeo = new THREE.SphereGeometry(R, 64, 64);
+    const sphereMat = new THREE.MeshStandardMaterial({ color: "#4d8b31", roughness: 1 });
+    const ground = new THREE.Mesh(sphereGeo, sphereMat);
+    ground.position.set(0, 0, Cz);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(1000, 1000, 1000);
+    scene.add(dirLight);
+
+    Graph.cameraPosition({ x: 0, y: R * 1.5, z: Cz + R * 1.5 }, { x: 0, y: 0, z: Cz }, 0);
+
+    // character animate
+    let raf = 0;
+    const animate = () => {
+      raf = requestAnimationFrame(animate);
+      scene.traverse((obj: THREE.Object3D) => {
+        const ud = (obj as any).userData;
+        if (ud?.isCharacter) {
+          const { source: s, target: t } = ud.linkData;
+          if (typeof s === "object" && typeof t === "object") {
+            const time = ((Date.now() + ud.offset) % 10000) / 10000;
+            const curve = getCurve(s, t);
+            const point = curve.getPoint(time);
+            obj.position.copy(point);
+
+            const nextTime = Math.min(time + 0.01, 1);
+            const lookAtPoint = curve.getPoint(nextTime);
+            obj.lookAt(lookAtPoint);
+          }
+        }
+      });
     };
+    animate();
 
-    const filePositions = positionNodes(fileNodes, mergedConfig.sphereRadius);
-    const dirPositions = positionNodes(
-      dirNodes,
-      mergedConfig.sphereRadius * 0.8
-    );
+    // resize
+    const onResize = () => {
+      if (!containerRef.current || !graphRef.current) return;
+      const w = containerRef.current.clientWidth;
+      const h = containerRef.current.clientHeight;
+      graphRef.current.width(w).height(h);
+    };
+    window.addEventListener("resize", onResize);
 
-    // Transform nodes for force-graph
-    const graphNodes = graphData.nodes.map((node) => {
-      const pos =
-        node.type === "file"
-          ? filePositions.get(node.id)
-          : dirPositions.get(node.id);
-
-      return {
-        id: node.id,
-        name: node.name,
-        type: node.type,
-        language: node.language || "",
-        lines: node.loc || 0,
-        fx: pos?.x || 0,
-        fy: pos?.y || 0,
-        fz: pos?.z || 0,
-      };
-    });
-
-    // Transform edges for force-graph
-    const graphLinks = graphData.edges.map((edge) => ({
-      source: edge.source,
-      target: edge.target,
-      type: edge.type,
-    }));
-
-    // Create the 3D force graph
-    const Graph = ForceGraph3D()(container)
-      .width(width)
-      .height(height)
-      .backgroundColor("#fbfbfc")
-      .showNavInfo(false)
-      .graphData({ nodes: graphNodes, links: graphLinks });
-
-    // Configure node appearance
-    Graph.nodeThreeObject((node: any) => {
-      const group = new THREE.Group();
-
-      if (node.type === "file") {
-        // Create building for file
-        const height = Math.max(5, Math.min(50, (node.lines || 10) / 10));
-        const size = 3 * mergedConfig.buildingScale;
-
-        const geometry = new THREE.BoxGeometry(size, height, size);
-        const color =
-          LANGUAGE_COLORS[node.language] || LANGUAGE_COLORS.default;
-        const material = new THREE.MeshLambertMaterial({
-          color: new THREE.Color(color),
-          transparent: true,
-          opacity: 0.9,
-        });
-
-        const building = new THREE.Mesh(geometry, material);
-        building.position.y = height / 2;
-        group.add(building);
-
-        // Add edge glow
-        const edgeGeometry = new THREE.EdgesGeometry(geometry);
-        const edgeMaterial = new THREE.LineBasicMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.3,
-        });
-        const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
-        edges.position.y = height / 2;
-        group.add(edges);
-      } else {
-        // Directory node - small sphere
-        const geometry = new THREE.SphereGeometry(2, 16, 16);
-        const material = new THREE.MeshLambertMaterial({
-          color: 0x94a3b8,
-          transparent: true,
-          opacity: 0.6,
-        });
-        const sphere = new THREE.Mesh(geometry, material);
-        group.add(sphere);
-      }
-
-      // Orient building to point away from sphere center
-      const pos = new THREE.Vector3(node.fx, node.fy, node.fz);
-      if (pos.length() > 0) {
-        const up = pos.clone().normalize();
-        const quaternion = new THREE.Quaternion();
-        quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), up);
-        group.quaternion.copy(quaternion);
-      }
-
-      return group;
-    });
-
-    // Configure link appearance
-    Graph.linkColor(() => "rgba(99, 102, 241, 0.3)")
-      .linkWidth(0.5)
-      .linkOpacity(0.3);
-
-    // Add central sphere (planet core)
-    const sphereGeometry = new THREE.SphereGeometry(
-      mergedConfig.sphereRadius * 0.7,
-      64,
-      64
-    );
-    const sphereMaterial = new THREE.MeshPhongMaterial({
-      color: 0xf1f5f9,
-      transparent: true,
-      opacity: 0.3,
-      wireframe: false,
-    });
-    const coreSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    Graph.scene().add(coreSphere);
-
-    // Add ambient light
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    Graph.scene().add(ambientLight);
-
-    // Add directional light
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(100, 100, 100);
-    Graph.scene().add(directionalLight);
-
-    // Set camera position
-    Graph.cameraPosition({ x: 0, y: 0, z: mergedConfig.sphereRadius * 2.5 });
-
-    // Enable auto-rotation
-    Graph.controls().autoRotate = true;
-    Graph.controls().autoRotateSpeed = 0.5;
-
-    // Store reference
     graphRef.current = Graph;
 
-    // Handle resize
-    const handleResize = () => {
-      if (containerRef.current && graphRef.current) {
-        const w = containerRef.current.clientWidth;
-        const h = containerRef.current.clientHeight;
-        graphRef.current.width(w).height(h);
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-
-    // Cleanup function
     cleanupRef.current = () => {
-      window.removeEventListener("resize", handleResize);
-      if (graphRef.current) {
-        graphRef.current._destructor && graphRef.current._destructor();
-        graphRef.current = null;
-      }
-      // Clear container
-      if (container) {
-        while (container.firstChild) {
-          container.removeChild(container.firstChild);
-        }
-      }
-    };
-  }, [graphData, containerRef, mergedConfig]);
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+      try {
+        (graphRef.current as any)?._destructor?.();
+      } catch {}
+      graphRef.current = null;
 
-  // Initialize viewer when data changes
+      // container clear
+      while (el.firstChild) el.removeChild(el.firstChild);
+    };
+  }, [containerRef, graphData, buildCityData, loadOBJ, getCurve, changeTheme, focusOnNode, opts]);
+
   useEffect(() => {
-    initViewer();
+    init();
+    return () => cleanupRef.current?.();
+  }, [init]);
 
-    return () => {
-      if (cleanupRef.current) {
-        cleanupRef.current();
-      }
-    };
-  }, [initViewer]);
-
-  // Method to change theme
-  const setTheme = useCallback((theme: ThemeType) => {
-    // Theme change logic would go here
-    // For now, we just log it
-    console.log("Theme changed to:", theme);
-  }, []);
-
-  // Method to focus on a specific node
-  const focusNode = useCallback((nodeId: string) => {
-    if (graphRef.current) {
-      const node = graphRef.current
-        .graphData()
-        .nodes.find((n: any) => n.id === nodeId);
-      if (node) {
-        graphRef.current.cameraPosition(
-          { x: node.fx * 1.5, y: node.fy * 1.5, z: node.fz * 1.5 },
-          { x: 0, y: 0, z: 0 },
-          1000
-        );
-      }
-    }
-  }, []);
-
-  // Method to reset camera
-  const resetCamera = useCallback(() => {
-    if (graphRef.current) {
-      graphRef.current.cameraPosition(
-        { x: 0, y: 0, z: mergedConfig.sphereRadius * 2.5 },
-        { x: 0, y: 0, z: 0 },
-        1000
-      );
-    }
-  }, [mergedConfig.sphereRadius]);
+  // container가 처음에 0사이즈였다가 나중에 커지는 케이스 보정
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!containerRef.current || graphRef.current) return;
+      init();
+    }, 100);
+    return () => clearInterval(id);
+  }, [init, containerRef]);
 
   return {
     graphRef,
-    setTheme,
-    focusNode,
+    changeTheme,
     resetCamera,
+    focusOnNode,
   };
 }

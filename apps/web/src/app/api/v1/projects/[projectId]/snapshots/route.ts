@@ -8,6 +8,7 @@ import {
   ERR_NOT_FOUND,
   ERR_BAD_REQUEST,
   successResponse,
+  isValidUUID,
 } from '@/lib/errors';
 import { formatSnapshot } from '@/lib/helpers';
 
@@ -22,6 +23,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const { projectId } = await params;
+
+  if (!isValidUUID(projectId)) {
+    return ERR_NOT_FOUND('Project not found');
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },

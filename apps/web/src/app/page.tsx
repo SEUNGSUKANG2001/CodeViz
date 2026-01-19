@@ -91,9 +91,25 @@ export default function LandingPage() {
     if (!repoUrl) return;
     setLoading(true);
     try {
-      await new Promise((r) => setTimeout(r, 550));
-      // NOTE: your real route is /p/[projectId]
-      window.location.href = `/p/demo`;
+      const res = await fetch("/api/v1/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        // If unauthorized, redirect to login
+        if (res.status === 401) {
+          window.location.href = "/api/v1/auth/kakao/start";
+          return;
+        }
+        alert(data.error?.message || "Failed to create project");
+        return;
+      }
+      // Redirect to the project viewer page
+      window.location.href = `/p/${data.data.project.id}`;
+    } catch (err) {
+      alert("Failed to create project");
     } finally {
       setLoading(false);
     }

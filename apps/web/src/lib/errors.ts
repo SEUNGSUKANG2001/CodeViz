@@ -41,3 +41,10 @@ export function ERR_INTERNAL(message = 'Internal Server Error'): NextResponse<Ap
 export function successResponse<T>(data: T, status = 200): NextResponse<{ ok: true; data: T }> {
   return NextResponse.json({ ok: true, data }, { status });
 }
+
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidUUID(value: string): boolean {
+  return UUID_REGEX.test(value);
+}

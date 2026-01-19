@@ -87,7 +87,7 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
     !graphData;
 
   return (
-    <div className="relative h-full bg-[#fbfbfc]">
+    <div className="relative h-full bg-[#87CEEB]">
       {/* 3D Viewer Container */}
       <div
         ref={containerRef}

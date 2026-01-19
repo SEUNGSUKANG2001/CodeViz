@@ -6,6 +6,7 @@ import {
   ERR_NOT_FOUND,
   ERR_BAD_REQUEST,
   successResponse,
+  isValidUUID,
 } from '@/lib/errors';
 
 interface Params {
@@ -19,6 +20,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const { userId } = await params;
+
+  if (!isValidUUID(userId)) {
+    return ERR_NOT_FOUND('User not found');
+  }
 
   if (userId === auth.user.id) {
     return ERR_BAD_REQUEST('You cannot follow yourself');

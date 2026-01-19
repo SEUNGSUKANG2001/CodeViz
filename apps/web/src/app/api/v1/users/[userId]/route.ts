@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import {
   ERR_NOT_FOUND,
   successResponse,
+  isValidUUID,
 } from '@/lib/errors';
 import { formatUserProfile } from '@/lib/helpers';
 
@@ -12,6 +13,10 @@ interface Params {
 
 export async function GET(request: NextRequest, { params }: Params) {
   const { userId } = await params;
+
+  if (!isValidUUID(userId)) {
+    return ERR_NOT_FOUND('User not found');
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

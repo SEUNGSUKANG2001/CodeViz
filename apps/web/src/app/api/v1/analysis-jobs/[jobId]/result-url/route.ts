@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import { createPresignedGetUrl } from '@/lib/s3';
-import { ERR_NOT_FOUND, ERR_FORBIDDEN, successResponse } from '@/lib/errors';
+import { ERR_NOT_FOUND, ERR_FORBIDDEN, successResponse, isValidUUID } from '@/lib/errors';
 
 const PRESIGNED_URL_EXPIRES_IN = 300; // 5 minutes
 
@@ -11,6 +11,11 @@ export async function GET(
   { params }: { params: Promise<{ jobId: string }> }
 ) {
   const { jobId } = await params;
+
+  if (!isValidUUID(jobId)) {
+    return ERR_NOT_FOUND('Job not found');
+  }
+
   const auth = await getSession();
 
   // Find the job with project and check for public posts

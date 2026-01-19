@@ -5,6 +5,7 @@ import {
   ERR_UNAUTHORIZED,
   ERR_NOT_FOUND,
   successResponse,
+  isValidUUID,
 } from '@/lib/errors';
 
 interface Params {
@@ -18,6 +19,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const { postId } = await params;
+
+  if (!isValidUUID(postId)) {
+    return ERR_NOT_FOUND('Post not found');
+  }
 
   const post = await prisma.post.findUnique({
     where: { id: postId },

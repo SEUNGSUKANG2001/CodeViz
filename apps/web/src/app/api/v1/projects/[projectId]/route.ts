@@ -7,6 +7,7 @@ import {
   ERR_NOT_FOUND,
   ERR_BAD_REQUEST,
   successResponse,
+  isValidUUID,
 } from '@/lib/errors';
 import { formatProjectDetail } from '@/lib/helpers';
 
@@ -21,6 +22,10 @@ export async function GET(request: NextRequest, { params }: Params) {
   }
 
   const { projectId } = await params;
+
+  if (!isValidUUID(projectId)) {
+    return ERR_NOT_FOUND('Project not found');
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -52,6 +57,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const { projectId } = await params;
+
+  if (!isValidUUID(projectId)) {
+    return ERR_NOT_FOUND('Project not found');
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -105,6 +114,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   }
 
   const { projectId } = await params;
+
+  if (!isValidUUID(projectId)) {
+    return ERR_NOT_FOUND('Project not found');
+  }
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },

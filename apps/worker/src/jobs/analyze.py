@@ -1,10 +1,9 @@
-import time
-from datetime import datetime, timezone
 import traceback
+from datetime import datetime, timezone
 
 from src.services.db import get_job, update_job_status, update_project_status
 from src.services.s3 import upload_graph_json
-from src.services.mock_analyzer import generate_mock_graph, calculate_stats
+from src.services.repo_analyzer import analyze_repository
 
 
 def process_analysis_job(job_id: str) -> None:
@@ -12,8 +11,8 @@ def process_analysis_job(job_id: str) -> None:
     Process an analysis job:
     1. Load job from DB
     2. Update status to 'running'
-    3. Generate mock graph (or real analysis in the future)
-    4. Upload graph.json to S3
+    3. Clone and analyze the repository
+    4. Upload dependency graph to S3
     5. Update job with result URL and stats
     6. Update project status to 'ready'
     """
@@ -38,26 +37,36 @@ def process_analysis_job(job_id: str) -> None:
             message="Starting analysis..."
         )
 
-        # Simulate some work with progress updates
-        update_job_status(job_id, status="running", progress=0.2, message="Fetching repository...")
-        time.sleep(0.5)  # Simulate network delay
+        # Clone repository
+        update_job_status(
+            job_id,
+            status="running",
+            progress=0.1,
+            message="Cloning repository..."
+        )
 
-        update_job_status(job_id, status="running", progress=0.4, message="Parsing files...")
-        time.sleep(0.5)
+        # Analyze repository (this does the real work)
+        update_job_status(
+            job_id,
+            status="running",
+            progress=0.3,
+            message="Analyzing code structure..."
+        )
 
-        # Generate mock graph
-        update_job_status(job_id, status="running", progress=0.6, message="Building graph...")
-        graph = generate_mock_graph(repo_url, ref)
+        graph = analyze_repository(repo_url, ref)
         graph["metadata"]["analyzedAt"] = datetime.now(timezone.utc).isoformat()
 
-        time.sleep(0.3)
+        # Extract stats
+        stats = graph.get("stats", {})
 
-        # Calculate stats
-        update_job_status(job_id, status="running", progress=0.8, message="Calculating statistics...")
-        stats = calculate_stats(graph)
+        update_job_status(
+            job_id,
+            status="running",
+            progress=0.8,
+            message="Uploading results..."
+        )
 
         # Upload to S3
-        update_job_status(job_id, status="running", progress=0.9, message="Uploading results...")
         result_url = upload_graph_json(job_id, graph)
 
         # Mark job as done

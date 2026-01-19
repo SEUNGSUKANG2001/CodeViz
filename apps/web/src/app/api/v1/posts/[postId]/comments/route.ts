@@ -6,6 +6,7 @@ import {
   ERR_NOT_FOUND,
   ERR_BAD_REQUEST,
   successResponse,
+  isValidUUID,
 } from '@/lib/errors';
 import {
   formatComment,
@@ -19,6 +20,10 @@ interface Params {
 
 export async function GET(request: NextRequest, { params }: Params) {
   const { postId } = await params;
+
+  if (!isValidUUID(postId)) {
+    return ERR_NOT_FOUND('Post not found');
+  }
 
   const post = await prisma.post.findUnique({
     where: { id: postId },
@@ -79,6 +84,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const { postId } = await params;
+
+  if (!isValidUUID(postId)) {
+    return ERR_NOT_FOUND('Post not found');
+  }
 
   const post = await prisma.post.findUnique({
     where: { id: postId },

@@ -6,6 +6,7 @@ import {
   ERR_FORBIDDEN,
   ERR_NOT_FOUND,
   successResponse,
+  isValidUUID,
 } from '@/lib/errors';
 
 interface Params {
@@ -19,6 +20,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   }
 
   const { commentId } = await params;
+
+  if (!isValidUUID(commentId)) {
+    return ERR_NOT_FOUND('Comment not found');
+  }
 
   const comment = await prisma.comment.findUnique({
     where: { id: commentId },
