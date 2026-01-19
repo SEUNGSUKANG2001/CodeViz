@@ -33,11 +33,14 @@ export function TwoViewer({ data, focusedNode, onNodeClick, onBackgroundClick }:
         // Initialize 2D Graph
         const ForceGraphAny = ForceGraph as any;
         const Graph = ForceGraphAny()(containerRef.current)
-            .graphData(data)
+            .graphData({
+                nodes: data.nodes,
+                links: data.edges || []
+            })
             .backgroundColor("#000000")
-            .nodeLabel((node: any) => node.id.split("/").pop())
+            .nodeLabel((node: any) => node.id.split(/[\\/]/).pop())
             .nodeCanvasObject((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-                const label = node.id.split("/").pop();
+                const label = node.id.split(/[\\/]/).pop();
                 const fontSize = 12 / globalScale;
                 const isSelected = selectedNode && node.id === selectedNode.id;
 
@@ -95,7 +98,7 @@ export function TwoViewer({ data, focusedNode, onNodeClick, onBackgroundClick }:
         });
 
         // Force settings
-        Graph.d3Force("charge")?.strength(-200);
+        Graph.d3Force("charge")?.strength(-75);
         Graph.d3Force("link")?.distance(45);
 
         graphRef.current = Graph;

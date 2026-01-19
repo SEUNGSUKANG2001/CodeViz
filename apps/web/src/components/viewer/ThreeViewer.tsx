@@ -73,7 +73,13 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
   );
 
   const handleNodeSelect = useCallback((node: any) => {
-    setSelectedNode(node);
+    if (!node) return;
+
+    // 이미 데이터가 enrich 되어있으므로, ID로 찾아도 좋고 넘겨받은 객체를 그대로 써도 좋습니다.
+    // 다만 history 전환 시의 최신 상태(isModified 등)를 반영하기 위해 activeGraphData에서 조회합니다.
+    const fullNode = activeGraphData?.nodes.find((n: any) => n.id === node.id) || node;
+
+    setSelectedNode(fullNode);
     setSidebarActive(true);
 
     if (theme !== "2D") {
@@ -104,16 +110,11 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
       setActiveGraphData(graphData);
     } else {
       const snapshot = graphData.history[historyIndex];
-      // 해당 커밋에서 수정된 파일들의 경로 집합 생성
-      const modifiedPaths = new Set(snapshot.files.map(f => f.path));
-
-      // 모든 노드를 순회하며 해당 커밋에서 수정되었는지 여부(isModified) 표시
-      const newNodes = graphData.nodes.map(n => ({
-        ...n,
-        isModified: modifiedPaths.has(n.id)
-      }));
-
-      setActiveGraphData({ ...graphData, nodes: newNodes });
+      // Convert history snapshot to GraphData format if needed
+      // Assuming snapshot.files maps to nodes/edges
+      // For now, let's just keep the original structure if available
+      // If the backend returns full GraphData in history, it's easier.
+      // If not, we might need a transform function.
     }
   }, [graphData, historyIndex]);
 
@@ -163,6 +164,21 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
         if (!graphRes.ok) throw new Error("Failed to fetch graph data");
 
         const data: GraphData = await graphRes.json();
+
+        // [중요] 데이터를 받은 즉시 의존성 관계(imports/importedBy) 계산 및 주입
+        // 이를 통해 사이드바나 검색 결과에서 안정적으로 관계 데이터를 사용할 수 있음
+        const nodeMap = new Map<string, any>();
+        data.nodes.forEach((n: any) => {
+          n.imports = [];
+          n.importedBy = [];
+          nodeMap.set(n.id, n);
+        });
+        (data.edges || []).forEach((e: any) => {
+          if (nodeMap.has(e.source) && nodeMap.has(e.target)) {
+            nodeMap.get(e.source).imports.push(e.target);
+            nodeMap.get(e.target).importedBy.push(e.source);
+          }
+        });
 
         // 3. 데이터를 상태에 저장하고 엔진 준비 알림
         if (!cancelled) {
@@ -244,7 +260,7 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
                   setSearchQuery("");
                 }}
               >
-                <strong>{node.id.split("/").pop()}</strong>
+                <strong>{node.id.split(/[\\/]/).pop()}</strong>
                 <span className="sub-text">{node.id}</span>
               </button>
             ))}
@@ -300,7 +316,7 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
       {/* Neon Sidebar */}
       <div className={`viewer-sidebar ${sidebarActive ? "active" : ""}`}>
         <div className="sidebar-header">
-          <h2 id="sb-title">{selectedNode?.id.split("/").pop() || "File Name"}</h2>
+          <h2 id="sb-title">{selectedNode?.id.split(/[\\/]/).pop() || "File Name"}</h2>
           <button className="close-btn" onClick={closeSidebar}>
             &times;
           </button>
@@ -315,7 +331,7 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
           <ul id="sb-imports">
             {selectedNode?.imports?.map((imp: string) => (
               <li key={imp} title={imp} onClick={() => handleNodeSelect(graphData?.nodes.find(n => n.id === imp))}>
-                {imp.split("/").pop()}
+                {imp.split(/[\\/]/).pop()}
               </li>
             ))}
             {(!selectedNode?.imports || selectedNode.imports.length === 0) && (
@@ -329,7 +345,7 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
           <ul id="sb-usedby">
             {selectedNode?.importedBy?.map((by: string) => (
               <li key={by} title={by} onClick={() => handleNodeSelect(graphData?.nodes.find(n => n.id === by))}>
-                {by.split("/").pop()}
+                {by.split(/[\\/]/).pop()}
               </li>
             ))}
             {(!selectedNode?.importedBy || selectedNode.importedBy.length === 0) && (

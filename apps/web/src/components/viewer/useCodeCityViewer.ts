@@ -360,6 +360,7 @@ export function useCodeCityViewer(
    */
   const changeTheme = useCallback(
     async (theme: ThemeType) => {
+      if (theme === "2D") return; // 2D 테마는 3D 자산을 로드하지 않음
       if (theme === themeRef.current && CHARACTER_MODEL.current) return;
 
       // 1. 현재 테마의 카메라 상태 저장 (이탈 전)
@@ -445,7 +446,7 @@ export function useCodeCityViewer(
       // nodeThreeObject와 linkThreeObject를 재설정하여 모든 노드/링크의 3D 객체를 다시 생성함
       graphRef.current.nodeThreeObject(graphRef.current.nodeThreeObject());
       graphRef.current.linkThreeObject(graphRef.current.linkThreeObject());
-      graphRef.current.numTicks(60); // 배치를 다시 잡을 수 있도록 약간의 틱 추가
+      graphRef.current.cooldownTicks(100); // 방향(quaternion) 재계산 및 안정을 위해 충분한 틱 부여
     },
     [loadModel, Cz, R]
   );
@@ -521,7 +522,20 @@ export function useCodeCityViewer(
     const rect = el.getBoundingClientRect();
     if (rect.width < 10 || rect.height < 10) return;
 
-    // 이전 인스턴스 정리
+    // 이전 인스턴스 정리 또는 데이터 업데이트만 수행
+    if (graphRef.current) {
+      // 이미 엔진이 실행 중이라면 데이터만 교체 (매우 빠름, 깜빡임 없음)
+      const cityData = buildCityData(graphData);
+      cityDataRef.current = cityData;
+      graphRef.current.graphData(cityData);
+
+      // 데이터 교체 시 모든 3D 객체의 속성(빌딩 높이 등)을 강제로 갱신하도록 트리거
+      graphRef.current.nodeThreeObject(graphRef.current.nodeThreeObject());
+      graphRef.current.linkThreeObject(graphRef.current.linkThreeObject());
+      graphRef.current.cooldownTicks(60);
+      return;
+    }
+
     cleanupRef.current?.();
 
     // 1. 테마에 필요한 모델 로드 (캐릭터 등)
@@ -555,6 +569,8 @@ export function useCodeCityViewer(
         const group = new THREE.Group();
         const scale = Math.max(12, Math.log(node.lineCount || 10) * 12);
         const config = THEME_CONFIG[themeRef.current];
+        if (!config || themeRef.current === "2D") return group;
+
         const charCode = config.lastBuilding.charCodeAt(0);
         const startCode = "a".charCodeAt(0);
 
@@ -574,10 +590,11 @@ export function useCodeCityViewer(
             const box = new THREE.Box3().setFromObject(obj);
             const minY = box.min.y;
 
-            // 모델의 바닥을 pivot(0,0,0)에 맞춤 (스케일 적용 전 위치 조정)
-            obj.position.y = -minY;
+            obj.rotation.x = -Math.PI / 2; // +Y(Up)가 바깥쪽(+Z)이 되도록 회전
+            // 모델의 바닥(minY)이 그룹의 중심(0,0,0) 즉 표면에 오도록 Z축(바깥방향) 이동
+            // -Math.PI/2 회전 후에는 모델의 원래 Y축이 부모의 Z축이 됨
+            obj.position.z = minY;
 
-            obj.rotation.x = -Math.PI / 2; // +Y가 바깥쪽(-Z)이 되도록 회전 (거꾸로 되는 것 방지)
             obj.scale.set(scale, scale, scale);
             group.add(obj);
           })
@@ -691,21 +708,23 @@ export function useCodeCityViewer(
         const obj = (n as any).__threeObj as THREE.Object3D | undefined;
         if (obj) {
           const normal = new THREE.Vector3(n.x, n.y, n.z - Cz);
-          if (normal.lengthSq() > 1e-12) {
+          const lenSq = normal.lengthSq();
+          if (lenSq > 1e-6) {
             normal.normalize();
 
-            // lookAt 특이점(업벡터와 거의 평행) 방지용 up 선택
+            // lookAt 특이점(업벡터 상/하방) 방지용 up 선택
             const up = new THREE.Vector3(0, 1, 0);
-            if (Math.abs(normal.dot(up)) > 0.999) up.set(1, 0, 0);
+            if (Math.abs(normal.dot(up)) > 0.95) {
+              up.set(0, 0, 1); // 극점에서는 Z축을 기준으로 정렬
+            }
 
-            // up까지 안정적으로 맞추고 싶으면, lookAt 행렬에서 quaternion을 뽑아 스냅 적용
             const m = new THREE.Matrix4().lookAt(
-              new THREE.Vector3(0, 0, 0), // eye
-              normal, // target 방향
+              new THREE.Vector3(0, 0, 0),
+              normal,
               up
             );
-            const qUp = new THREE.Quaternion().setFromRotationMatrix(m);
-            obj.quaternion.copy(qUp);
+            obj.quaternion.setFromRotationMatrix(m);
+            obj.updateMatrix(); // 즉시 행렬 반영
           }
         }
       });
