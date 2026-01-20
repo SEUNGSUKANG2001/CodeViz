@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { apiFetch } from "@/lib/api";
-import type { FeedResponse, PostCard, MeResponse, Author } from "@/lib/types";
+import type {
+  FeedResponse,
+  PostCard,
+  MeResponse,
+  Author,
+  PlanetSummary,
+  UserPlanetsResponse,
+} from "@/lib/types";
 
-const PlanetBackground = dynamic<any>(
-  () => import("@/components/planet/PlanetBackground"),
+const LandingScene = dynamic<any>(
+  () => import("@/components/planet/LandingScene"),
   { ssr: false }
 );
 
@@ -21,33 +28,47 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false);
   const [feed, setFeed] = useState<PostCard[]>([]);
   const [user, setUser] = useState<Author | null>(null);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [targetProgress, setTargetProgress] = useState(0);
+  const [planets, setPlanets] = useState<PlanetSummary[]>([]);
+  const [defaultPlanetId, setDefaultPlanetId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"empty" | "main" | "carousel">("empty");
   const [repos, setRepos] = useState<any[]>([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
   const [showRepos, setShowRepos] = useState(false);
-  const progressRef = useRef(0);
-  const isAnimatingRef = useRef(false);
+  const wheelLockRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
-  const DEBUG_PLANET = false;
-
   useEffect(() => {
-    progressRef.current = scrollProgress;
-  }, [scrollProgress]);
-
-  useEffect(() => {
-    const onWheel = () => {
-      if (isAnimatingRef.current) return;
-      const current = progressRef.current;
-      const nextTarget = current > 0.5 ? 0 : 1;
-      setTargetProgress(nextTarget);
-      if (DEBUG_PLANET) console.log("Scroll trigger ->", nextTarget);
+    const onWheel = (e: WheelEvent) => {
+      if (!user) return;
+      if (wheelLockRef.current) return;
+      if (Math.abs(e.deltaY) < 2) return;
+      if (e.deltaY > 0) {
+        setViewMode("carousel");
+      } else {
+        setViewMode("main");
+      }
+      wheelLockRef.current = true;
+      setTimeout(() => {
+        wheelLockRef.current = false;
+      }, 500);
     };
     window.addEventListener("wheel", onWheel, { passive: true });
     return () => window.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+        document.documentElement.style.overflow = "";
+      };
+    }
+    document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+  }, [user]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -59,41 +80,37 @@ export default function LandingPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    let raf = 0;
-    let last = performance.now();
-
-    const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      setScrollProgress((prev) => {
-        const t = 1 - Math.exp(-2.6 * dt);
-        const next = prev + (targetProgress - prev) * t;
-        progressRef.current = next;
-        isAnimatingRef.current = Math.abs(targetProgress - next) > 0.002;
-        return next;
-      });
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [targetProgress]);
 
   useEffect(() => {
     (async () => {
       try {
         const [feedRes, meRes] = await Promise.all([
           apiFetch<FeedResponse>("/api/v1/feed?limit=8"),
-          apiFetch<MeResponse>("/api/v1/auth/me")
+          apiFetch<MeResponse>("/api/v1/auth/me"),
         ]);
         setFeed(feedRes.data.items);
         if (meRes.ok) {
           setUser(meRes.data.user);
+          setViewMode("empty");
           fetchRepos();
+          try {
+            const planetsRes = await apiFetch<UserPlanetsResponse>("/api/v1/planets");
+            setPlanets(planetsRes.data.items);
+            setDefaultPlanetId(planetsRes.data.defaultPlanetId);
+          } catch {
+            setPlanets([]);
+            setDefaultPlanetId(null);
+          }
+          window.setTimeout(() => {
+            setViewMode("main");
+          }, 250);
+        } else {
+          setUser(null);
+          setViewMode("empty");
         }
       } catch {
-        // Silently fail for feed/auth
+        setUser(null);
+        setViewMode("empty");
       }
     })();
   }, []);
@@ -144,17 +161,37 @@ export default function LandingPage() {
     }
   };
 
+  const handleSelectPlanet = useCallback(async (planetId: string) => {
+    try {
+      await fetch("/api/v1/planets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planetId }),
+      });
+      setDefaultPlanetId(planetId);
+    } catch {
+      // ignore
+    } finally {
+      setViewMode("main");
+    }
+  }, []);
+
   return (
     <main className="relative min-h-[200vh] overflow-hidden text-white">
       <div className="fixed inset-0 -z-10">
-        <PlanetBackground feedItems={feed} scrollProgress={scrollProgress} />
+        <LandingScene
+          mode={viewMode}
+          planets={planets}
+          activePlanetId={defaultPlanetId}
+          onSelectPlanet={handleSelectPlanet}
+        />
       </div>
 
       <section className="relative z-10 min-h-[100vh] px-10 pt-8 pointer-events-none">
         <div
           className="mx-auto flex max-w-[1600px] flex-col"
           style={{
-            transform: `translateY(${-scrollProgress * 120}px)`,
+            transform: viewMode === "carousel" ? "translateY(-120px)" : "translateY(0)",
           }}
         >
           <header className="flex items-center justify-between pointer-events-auto">

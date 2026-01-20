@@ -13,6 +13,7 @@ model User {
   displayName String?  @map("display_name")
   bio         String?
   avatarUrl   String?  @map("avatar_url")
+  defaultPlanetId String? @map("default_planet_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -25,6 +26,8 @@ model User {
   followers  UserFollow[]   @relation("following")
   following  UserFollow[]   @relation("follower")
   uploads    Upload[]
+  planets    Planet[]
+  defaultPlanet Planet? @relation("DefaultPlanet", fields: [defaultPlanetId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -76,6 +79,8 @@ model Project {
   owner     User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   jobs      AnalysisJob[]
   snapshots Snapshot[]
+  planet    Planet?
+  city      City?
 
   @@map("projects")
 }
@@ -212,4 +217,38 @@ model Upload {
   user User @relation(fields: [createdBy], references: [id], onDelete: Cascade)
 
   @@map("uploads")
+}
+
+model Planet {
+  id        String   @id @default(uuid()) @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  projectId String?  @unique @map("project_id") @db.Uuid
+  seed      Int
+  params    Json     @default("{}")
+  palette   Json     @default("{}")
+  cloudColor Json    @default("{}") @map("cloud_color")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner   User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  city    City?
+  defaultForUsers User[] @relation("DefaultPlanet")
+
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@map("planets")
+}
+
+model City {
+  id          String   @id @default(uuid()) @db.Uuid
+  planetId    String   @unique @map("planet_id") @db.Uuid
+  projectId   String?  @unique @map("project_id") @db.Uuid
+  cityJsonKey String   @map("city_json_key")
+  statsJson   Json?    @map("stats_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  planet  Planet @relation(fields: [planetId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("cities")
 }

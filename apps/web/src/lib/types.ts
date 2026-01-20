@@ -6,6 +6,26 @@ export type Author = {
   avatarUrl?: string | null;
 };
 
+export type PlanetSummary = {
+  id: string;
+  seed: number;
+  params: Record<string, unknown>;
+  palette: Record<string, unknown>;
+  cloudColor: Record<string, unknown>;
+  projectId: string | null;
+  city?: {
+    cityJsonKey: string;
+  } | null;
+};
+
+export type UserPlanetsResponse = {
+  ok: true;
+  data: {
+    defaultPlanetId: string | null;
+    items: PlanetSummary[];
+  };
+};
+
 export type JobStatus = "queued" | "running" | "done" | "failed" | "canceled";
 
 export type PostCard = {
