@@ -294,6 +294,7 @@ export default function LandingScene({
   activePlanetId = null,
   onSelectPlanet,
   onFocusPlanetChange,
+  onPlanetPick,
 }) {
   const [dragOffset, setDragOffset] = useState(0);
   const [targetOffset, setTargetOffset] = useState(0);
@@ -334,12 +335,16 @@ export default function LandingScene({
   );
 
   const handlePick = useCallback(
-    (planet) => {
+    (planet, point, normal) => {
       if (mode !== "carousel") return;
       if (!planet?.id) return;
+      if (onPlanetPick) {
+        onPlanetPick(planet, point, normal);
+        return;
+      }
       onSelectPlanet?.(planet.id);
     },
-    [mode, onSelectPlanet]
+    [mode, onSelectPlanet, onPlanetPick]
   );
 
   useEffect(() => {
@@ -402,7 +407,7 @@ export default function LandingScene({
                 key={planet.id || idx}
                 planet={planet}
                 position={[idx * spacing, 0, 0]}
-                onPick={() => handlePick(planet)}
+                onPick={(point, normal) => handlePick(planet, point, normal)}
               />
             ))}
           </group>
