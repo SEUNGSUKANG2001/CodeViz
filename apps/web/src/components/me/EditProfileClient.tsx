@@ -95,7 +95,8 @@ export function EditProfileClient() {
             <div className="text-sm text-neutral-500">Login required</div>
             <button
               onClick={() =>
-                (window.location.href = "/api/v1/auth/kakao/start")
+                // (window.location.href = "/api/v1/auth/kakao/start")
+                (window.location.href = "/api/v1/auth/github/start")
               }
               className="rounded-full bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
             >

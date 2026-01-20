@@ -46,7 +46,8 @@ export default function LandingPage() {
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 401) {
-          router.push("/api/v1/auth/kakao/start");
+          // router.push("/api/v1/auth/kakao/start");
+          router.push("/api/v1/auth/github/start");
           return;
         }
         alert(data.error?.message || "Failed to create project");
@@ -103,7 +104,8 @@ export default function LandingPage() {
                 Explore
               </Link>
               <button
-                onClick={() => router.push("/api/v1/auth/kakao/start")}
+                // onClick={() => router.push("/api/v1/auth/kakao/start")}
+                onClick={() => router.push("/api/v1/auth/github/start")}
                 className="rounded-full bg-cyan-300/90 px-4 py-2 text-sm font-medium text-black hover:bg-cyan-200"
               >
                 Login

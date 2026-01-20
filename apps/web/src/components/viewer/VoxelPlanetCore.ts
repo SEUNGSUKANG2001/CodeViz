@@ -540,6 +540,7 @@ const cloudFS = `
 export interface VoxelPlanet {
     group: THREE.Group;
     update: (dt: number) => void;
+    dispose: () => void;
 }
 
 export function createVoxelPlanet({
@@ -592,7 +593,8 @@ export function createVoxelPlanet({
         vertexShader: waterVS,
         fragmentShader: waterFS,
     });
-    const waterMesh = new THREE.Mesh(new THREE.SphereGeometry(waterR, 128, 128), waterMat);
+    const waterGeom = new THREE.SphereGeometry(waterR, 128, 128);
+    const waterMesh = new THREE.Mesh(waterGeom, waterMat);
     group.add(waterMesh);
 
     // 3. Atmosphere
@@ -617,7 +619,8 @@ export function createVoxelPlanet({
         vertexShader: atmosphereVS,
         fragmentShader: atmosphereFS,
     });
-    const atmoMesh = new THREE.Mesh(new THREE.SphereGeometry(radius + thickness, 96, 96), atmoMat);
+    const atmoGeom = new THREE.SphereGeometry(radius + thickness, 96, 96);
+    const atmoMesh = new THREE.Mesh(atmoGeom, atmoMat);
     group.add(atmoMesh);
 
     // 4. Clouds
@@ -644,8 +647,9 @@ export function createVoxelPlanet({
             vertexShader: cloudVS,
             fragmentShader: cloudFS,
         });
-        const cMesh = new THREE.Mesh(new THREE.SphereGeometry(radius * scale, 48, 48), cMat);
-        return { mesh: cMesh, mat: cMat };
+        const cGeom = new THREE.SphereGeometry(radius * scale, 48, 48);
+        const cMesh = new THREE.Mesh(cGeom, cMat);
+        return { mesh: cMesh, mat: cMat, geom: cGeom };
     }
 
     const layers = [
@@ -664,5 +668,20 @@ export function createVoxelPlanet({
             layers[1].mat.uniforms.uTime.value += dt * 0.9;
             layers[2].mat.uniforms.uTime.value += dt * 0.8;
         },
+        dispose: () => {
+            console.log("🧹 Disposing Voxel Planet Resources...");
+            group.traverse((obj: any) => {
+                if (obj.isMesh) {
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) {
+                        if (Array.isArray(obj.material)) {
+                            obj.material.forEach((m: any) => m.dispose());
+                        } else {
+                            obj.material.dispose();
+                        }
+                    }
+                }
+            });
+        }
     };
 }

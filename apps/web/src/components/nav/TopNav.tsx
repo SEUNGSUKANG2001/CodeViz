@@ -37,9 +37,10 @@ export function TopNav({ isAuthed }: Props) {
             </Link>
           ) : (
             <button
-              onClick={() => {
-                router.push("/api/v1/auth/kakao/start");
-              }}
+              // onClick={() => {
+              //   router.push("/api/v1/auth/kakao/start");
+              // }}
+              onClick={() => router.push("/api/v1/auth/github/start")}
               className="rounded-full bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-800"
             >
               Login

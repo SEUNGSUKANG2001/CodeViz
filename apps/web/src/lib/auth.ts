@@ -105,8 +105,9 @@ export async function destroySession(): Promise<void> {
   });
 }
 
-export async function findOrCreateUserByKakao(
-  kakaoId: string,
+export async function findOrCreateUserByProvider(
+  provider: string,
+  providerUserId: string,
   profile: {
     nickname?: string;
     profileImage?: string;
@@ -115,8 +116,8 @@ export async function findOrCreateUserByKakao(
   const existingIdentity = await prisma.userIdentity.findUnique({
     where: {
       provider_providerUserId: {
-        provider: 'kakao',
-        providerUserId: kakaoId,
+        provider,
+        providerUserId,
       },
     },
     include: { user: true },
@@ -132,12 +133,23 @@ export async function findOrCreateUserByKakao(
       avatarUrl: profile.profileImage || null,
       identities: {
         create: {
-          provider: 'kakao',
-          providerUserId: kakaoId,
+          provider,
+          providerUserId,
         },
       },
     },
   });
 
   return user;
+}
+
+/** @deprecated Use findOrCreateUserByProvider instead */
+export async function findOrCreateUserByKakao(
+  kakaoId: string,
+  profile: {
+    nickname?: string;
+    profileImage?: string;
+  }
+): Promise<User> {
+  return findOrCreateUserByProvider('kakao', kakaoId, profile);
 }

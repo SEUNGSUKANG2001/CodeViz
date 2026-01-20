@@ -757,6 +757,7 @@ export function useCodeCityViewer(
     voxelPlanet.group.position.set(0, 0, Cz);
     scene.add(voxelPlanet.group);
     planetUpdateRef.current = voxelPlanet.update;
+    (Graph as any).__voxelPlanet = voxelPlanet; // Store for cleanup
 
     // 6-3. 조명 설정
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.45));
@@ -847,12 +848,43 @@ export function useCodeCityViewer(
       console.log("🧹 CodeCityViewer Engine Cleaning up...");
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
-      try {
-        (graphRef.current as any)?._destructor?.();
-      } catch { }
+
+      if (graphRef.current) {
+        const scene = graphRef.current.scene();
+        const renderer = graphRef.current.renderer();
+
+        // 1. Dispose of the planet if exists
+        (graphRef.current as any).__voxelPlanet?.dispose?.();
+
+        // 2. Deep traverse scene and dispose of resources
+        scene.traverse((obj: any) => {
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) {
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach((m: any) => m.dispose());
+            } else {
+              obj.material.dispose();
+            }
+          }
+        });
+
+        // 3. Destroy force-graph instance
+        try {
+          (graphRef.current as any)?._destructor?.();
+        } catch (e) {
+          console.warn("Error in force-graph destructor:", e);
+        }
+
+        // 4. Dispose of renderer
+        if (renderer) {
+          renderer.dispose();
+          renderer.forceContextLoss();
+        }
+      }
+
       graphRef.current = null;
 
-      // 캔버스 요소 수동 삭제
+      // 5. Clear container
       while (el.firstChild) el.removeChild(el.firstChild);
     };
   }, [containerRef, graphData, buildCityData, loadModel, getCurve, changeTheme, focusOnNode]);
@@ -871,13 +903,13 @@ export function useCodeCityViewer(
   }, [opts?.theme, changeTheme]);
 
   // 컨테이너 레이아웃 지연 보정용 주기적 시도
+  // [강력 수정] setInterval을 통한 중복 init() 방지. 
+  // 대신 컨테이너가 준비되면 한 번만 실행되도록 init 호출 조건을 useEffect에서 관리함.
   useEffect(() => {
-    const id = setInterval(() => {
-      if (!containerRef.current || graphRef.current) return;
+    if (containerRef.current && !graphRef.current && graphData) {
       init();
-    }, 100);
-    return () => clearInterval(id);
-  }, [init, containerRef]);
+    }
+  }, [init, containerRef, graphData]);
 
   /**
    * 노드 및 연결된 링크 하이라이트 통합 처리
