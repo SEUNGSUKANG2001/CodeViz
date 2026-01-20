@@ -266,12 +266,79 @@ function resolvePlanetParams(planet) {
   };
 }
 
-function PlanetNode({ planet, position, onPick }) {
+function PlanetNode({
+  planet,
+  position,
+  onPick,
+  placementMode,
+  placement,
+  focusId,
+  enableRotateDrag,
+}) {
   const params = resolvePlanetParams(planet);
   const palette = planet?.palette || {};
   const cloudColor = planet?.cloudColor || {};
+  const groupRef = useRef(null);
+  const targetQuat = useRef(new THREE.Quaternion());
+  const hasTarget = useRef(false);
+  const dragRef = useRef({ active: false, lastX: 0, lastY: 0 });
+
+  useEffect(() => {
+    if (!placementMode || !placement?.point) {
+      hasTarget.current = false;
+      return;
+    }
+    if (focusId && planet?.id !== focusId) {
+      hasTarget.current = false;
+      return;
+    }
+    const point = new THREE.Vector3(...placement.point);
+    const localDir = point.clone().sub(new THREE.Vector3(...position)).normalize();
+    const targetDir = new THREE.Vector3(0, 0, 1);
+    targetQuat.current.setFromUnitVectors(localDir, targetDir);
+    hasTarget.current = true;
+  }, [placementMode, placement, focusId, planet, position]);
+
+  useEffect(() => {
+    if (!enableRotateDrag) return;
+    const onPointerDown = (e) => {
+      if (e.button !== 0) return;
+      dragRef.current.active = true;
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
+    };
+    const onPointerMove = (e) => {
+      if (!dragRef.current.active || !groupRef.current) return;
+      const dx = e.clientX - dragRef.current.lastX;
+      const dy = e.clientY - dragRef.current.lastY;
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
+      hasTarget.current = false;
+      groupRef.current.rotation.y += dx * 0.005;
+      groupRef.current.rotation.x += dy * 0.003;
+      groupRef.current.rotation.x = THREE.MathUtils.clamp(groupRef.current.rotation.x, -1.2, 1.2);
+    };
+    const onPointerUp = () => {
+      dragRef.current.active = false;
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [enableRotateDrag]);
+
+  useFrame((_, dt) => {
+    if (!groupRef.current || !hasTarget.current) return;
+    const t = 1 - Math.exp(-6 * dt);
+    groupRef.current.quaternion.slerp(targetQuat.current, t);
+  });
+
   return (
-    <group position={position}>
+    <group position={position} ref={groupRef}>
       <VoxelPlanet
         seed={params.seed}
         gridSize={32}
@@ -284,10 +351,67 @@ function PlanetNode({ planet, position, onPick }) {
         palette={palette}
         cloudColor={cloudColor}
         sunDir={[-30, 22, -18]}
-        rotatePeriodSec={80}
+        rotatePeriodSec={placementMode ? 0 : 80}
         cloudSpeedFactor={0.4}
         onPick={onPick}
       />
+    </group>
+  );
+}
+
+function PlacementMarker({ placement }) {
+  const normal = useMemo(() => {
+    if (!placement?.normal) return null;
+    return new THREE.Vector3(...placement.normal).normalize();
+  }, [placement]);
+  const position = placement?.point ?? null;
+  const rotation = useMemo(() => {
+    if (!normal) return null;
+    const up = new THREE.Vector3(0, 1, 0);
+    const q = new THREE.Quaternion().setFromUnitVectors(up, normal);
+    return q;
+  }, [normal]);
+  const pulseRef = useRef(null);
+  const glowRef = useRef(null);
+
+  useFrame((state) => {
+    if (!pulseRef.current || !glowRef.current) return;
+    const t = state.clock.getElapsedTime();
+    const s = 1 + Math.sin(t * 3.2) * 0.08;
+    pulseRef.current.scale.setScalar(s);
+    glowRef.current.material.opacity = 0.35 + Math.sin(t * 3.2) * 0.15;
+  });
+
+  if (!position || !rotation) return null;
+
+  return (
+    <group position={position} quaternion={rotation}>
+      <group ref={pulseRef}>
+        <mesh>
+          <cylinderGeometry args={[0.08, 0.12, 0.28, 12]} />
+          <meshStandardMaterial color="#cfe9ff" emissive="#2bd5ff" emissiveIntensity={0.6} />
+        </mesh>
+        <mesh position={[0, 0.22, 0]}>
+          <coneGeometry args={[0.12, 0.3, 12]} />
+          <meshStandardMaterial color="#f7fbff" emissive="#8be7ff" emissiveIntensity={0.7} />
+        </mesh>
+        <mesh position={[0.12, 0, -0.02]} rotation={[0, 0, Math.PI / 2]}>
+          <boxGeometry args={[0.16, 0.02, 0.08]} />
+          <meshStandardMaterial color="#6fd3ff" emissive="#4bc2ff" emissiveIntensity={0.8} />
+        </mesh>
+        <mesh position={[-0.12, 0, -0.02]} rotation={[0, 0, -Math.PI / 2]}>
+          <boxGeometry args={[0.16, 0.02, 0.08]} />
+          <meshStandardMaterial color="#6fd3ff" emissive="#4bc2ff" emissiveIntensity={0.8} />
+        </mesh>
+        <mesh position={[0, -0.2, 0]}>
+          <sphereGeometry args={[0.08, 12, 12]} />
+          <meshStandardMaterial color="#2bd5ff" emissive="#2bd5ff" emissiveIntensity={1.4} />
+        </mesh>
+      </group>
+      <mesh ref={glowRef}>
+        <sphereGeometry args={[0.45, 18, 18]} />
+        <meshBasicMaterial color="#58e3ff" transparent opacity={0.45} />
+      </mesh>
     </group>
   );
 }
@@ -299,6 +423,9 @@ export default function LandingScene({
   onSelectPlanet,
   onFocusPlanetChange,
   onPlanetPick,
+  placementMode = false,
+  placement = null,
+  focusId = null,
 }) {
   const [dragOffset, setDragOffset] = useState(0);
   const [targetOffset, setTargetOffset] = useState(0);
@@ -401,7 +528,7 @@ export default function LandingScene({
         />
 
         {mode === "main" && (
-          <PlanetNode planet={mainPlanet} position={[-2.2, -0.35, 0]} />
+          <PlanetNode planet={mainPlanet} position={[-2.2, -0.35, 0]} placementMode={false} />
         )}
 
         {mode === "carousel" && (
@@ -412,10 +539,16 @@ export default function LandingScene({
                 planet={planet}
                 position={[idx * spacing, 0, 0]}
                 onPick={(point, normal) => handlePick(planet, point, normal)}
+                placementMode={placementMode}
+                placement={placement}
+                focusId={focusId}
+                enableRotateDrag={placementMode && focusId === planet.id}
               />
             ))}
           </group>
         )}
+
+        {mode === "carousel" && placementMode && <PlacementMarker placement={placement} />}
       </Canvas>
     </div>
   );

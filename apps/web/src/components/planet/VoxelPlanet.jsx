@@ -895,6 +895,7 @@ export default function VoxelPlanet({
   )
 
   useFrame((_, dt) => {
+    if (!rotatePeriodSec || rotatePeriodSec <= 0) return
     const w = (Math.PI * 2) / Math.max(1, rotatePeriodSec)
     if (root.current) root.current.rotation.y += w * dt
     if (cloudGroup.current) cloudGroup.current.rotation.y += w * cloudSpeedFactor * dt

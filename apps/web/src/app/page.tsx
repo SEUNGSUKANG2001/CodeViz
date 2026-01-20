@@ -414,6 +414,7 @@ export default function LandingPage() {
     point: [number, number, number];
     normal: [number, number, number];
   } | null>(null);
+  const isCustomizing = pendingProjectId !== null && customPlanets.length > 0;
   const [repos, setRepos] = useState<any[]>([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
   const [showRepos, setShowRepos] = useState(false);
@@ -424,6 +425,7 @@ export default function LandingPage() {
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
       if (!user) return;
+      if (isCustomizing) return;
       if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) return;
       if (wheelLockRef.current) return;
       if (Math.abs(e.deltaY) < 2) return;
@@ -439,7 +441,7 @@ export default function LandingPage() {
     };
     window.addEventListener("wheel", onWheel, { passive: true });
     return () => window.removeEventListener("wheel", onWheel);
-  }, [user]);
+  }, [user, isCustomizing]);
 
   useEffect(() => {
     if (!user) {
@@ -581,7 +583,6 @@ export default function LandingPage() {
     setFocusedPlanet(customPlanets[0] ?? null);
   }, [customPlanets]);
 
-  const isCustomizing = pendingProjectId !== null && customPlanets.length > 0;
   const carouselPlanets = isCustomizing ? customPlanets : planets;
   const carouselActiveId = isCustomizing
     ? focusedPlanet?.id ?? customPlanets[0]?.id ?? null
@@ -629,6 +630,14 @@ export default function LandingPage() {
     }
   };
 
+  const handleExitCustomizing = () => {
+    setCustomPlanets([]);
+    setPendingProjectId(null);
+    setPlacementMode(false);
+    setPlacement(null);
+    setViewMode("main");
+  };
+
   return (
     <main className="relative min-h-[200vh] overflow-hidden text-white">
       <div className="fixed inset-0 z-0 pointer-events-auto">
@@ -649,6 +658,9 @@ export default function LandingPage() {
                 }
               : undefined
           }
+          placementMode={placementMode}
+          placement={placement}
+          focusId={focusedPlanet?.id ?? null}
         />
       </div>
 
@@ -869,6 +881,13 @@ export default function LandingPage() {
                 : placementMode
                   ? "Confirm Landing Site"
                   : "Terraforming"}
+            </button>
+            <button
+              type="button"
+              onClick={handleExitCustomizing}
+              className="w-full border border-white/20 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
+            >
+              돌아가기
             </button>
           </div>
         )}
