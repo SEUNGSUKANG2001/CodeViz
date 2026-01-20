@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { apiFetch } from "@/lib/api";
-import type { FeedResponse, PostCard } from "@/lib/types";
+import type { FeedResponse, PostCard, MeResponse, Author } from "@/lib/types";
 
-const PlanetBackground = dynamic(
+const PlanetBackground = dynamic<any>(
   () => import("@/components/planet/PlanetBackground"),
   { ssr: false }
 );
@@ -20,6 +20,7 @@ export default function LandingPage() {
   const [repoUrl, setRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [feed, setFeed] = useState<PostCard[]>([]);
+  const [user, setUser] = useState<Author | null>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [targetProgress, setTargetProgress] = useState(0);
   const progressRef = useRef(0);
@@ -68,10 +69,16 @@ export default function LandingPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiFetch<FeedResponse>("/api/v1/feed?limit=8");
-        setFeed(res.data.items);
+        const [feedRes, meRes] = await Promise.all([
+          apiFetch<FeedResponse>("/api/v1/feed?limit=8"),
+          apiFetch<MeResponse>("/api/v1/auth/me")
+        ]);
+        setFeed(feedRes.data.items);
+        if (meRes.ok) {
+          setUser(meRes.data.user);
+        }
       } catch {
-        setFeed([]);
+        // Silently fail for feed/auth
       }
     })();
   }, []);
@@ -126,14 +133,44 @@ export default function LandingPage() {
               </span>
             </Link>
 
-            <div className="flex items-center gap-2">
-              <button
-                // onClick={() => router.push("/api/v1/auth/kakao/start")}
-                onClick={() => router.push("/api/v1/auth/github/start")}
-                className="rounded-full bg-cyan-300/90 px-4 py-2 text-sm font-medium text-black hover:bg-cyan-200"
-              >
-                Login
-              </button>
+            <div className="flex items-center gap-4">
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-end">
+                    <span className="text-xs font-medium text-white/90">
+                      {user.displayName || user.username}
+                    </span>
+                    <button
+                      onClick={async () => {
+                        await fetch("/api/v1/auth/logout", { method: "POST" });
+                        setUser(null);
+                      }}
+                      className="text-[10px] text-white/40 hover:text-white/60"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.displayName || "Avatar"}
+                      className="h-8 w-8 rounded-full border border-white/10"
+                    />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[10px]">
+                      {user.username?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  // onClick={() => router.push("/api/v1/auth/kakao/start")}
+                  onClick={() => router.push("/api/v1/auth/github/start")}
+                  className="rounded-full bg-cyan-300/90 px-4 py-2 text-sm font-medium text-black hover:bg-cyan-200"
+                >
+                  Login
+                </button>
+              )}
             </div>
           </header>
 
