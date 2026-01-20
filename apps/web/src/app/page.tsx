@@ -35,16 +35,19 @@ const PLANET_PROFILES = [
         "끝없는 설풍이 지평선을 밀어내는 만년설 행성이다.",
         "얼음 판이 대륙처럼 흘러가며 표면을 유리처럼 깎아낸다.",
         "차가운 태양빛이 비치지만, 따뜻함은 끝내 닿지 않는다.",
+        "하루의 시간 감각이 흐릿해지는 극지성의 리듬이 있다.",
       ],
       life: [
         "열분출구 위로 떠도는 유목 부족이 겨우 생존한다.",
         "지하 동굴의 지열 도시가 유일한 숨 쉴 곳이다.",
         "정착민들은 얼음 속 음향을 길잡이로 삼는다.",
+        "빛 대신 맥동하는 지열 신호가 길을 안내한다.",
       ],
       warning: [
         "테라포밍은 거대한 눈폭풍과의 장기전이 될 것이다.",
         "희박한 공기와 냉각풍이 사방에서 밀려든다.",
         "열돔과 반사 거울 없이는 정착이 불가능하다.",
+        "지표 온도 안정화가 완료되기 전까지는 지상 거주가 위험하다.",
       ],
     },
   },
@@ -59,16 +62,19 @@ const PLANET_PROFILES = [
         "끝없는 모래와 열기만 존재하는 타오르는 세계다.",
         "지평선은 아지랑이로 굴절되고, 대지는 용광로처럼 흔들린다.",
         "낮에는 타오르고 밤에는 급격히 얼어붙는다.",
+        "낮과 밤의 경계는 강철처럼 날카롭다.",
       ],
       life: [
         "물과 정보를 거래하는 별빛 상단이 사막을 누빈다.",
         "현무암 기둥의 그늘에 도시가 매달려 있다.",
         "유목 카라반이 모래 바다의 지도 자체다.",
+        "밤마다 유성우를 따라 이동하는 이주단이 있다.",
       ],
       warning: [
         "테라포밍은 극단적 일교차를 먼저 길들여야 한다.",
         "모래폭풍은 정착지를 삼킬 만큼 폭력적이다.",
         "수분 보존 기술 없이는 생존이 어렵다.",
+        "행성 궤도에 거대 수분 저장소를 구축해야 한다.",
       ],
     },
   },
@@ -83,16 +89,19 @@ const PLANET_PROFILES = [
         "대양이 대부분을 덮고 폭풍이 행성을 감싸는 세계다.",
         "거대한 구름대가 따뜻한 해류를 따라 돈다.",
         "수평선은 빛과 파도의 거울로 끊임없이 흔들린다.",
+        "대기층이 두꺼워 하늘이 낮게 내려앉은 듯하다.",
       ],
       life: [
         "부유도시는 거대한 해류를 따라 항해한다.",
         "심해 길드가 발광 광물을 채굴한다.",
         "별처럼 빛나는 산호 군락이 항로가 된다.",
+        "바다 위로만 존재하는 거대한 교역망이 형성돼 있다.",
       ],
       warning: [
         "테라포밍은 조류와 조석을 안정시키는 것이 핵심이다.",
         "태풍과 고습도가 일상처럼 밀려온다.",
         "해상 기반 시설이 필수다.",
+        "해상 부유 플랫폼이 없으면 도시 유지가 불가능하다.",
       ],
     },
   },
@@ -107,16 +116,19 @@ const PLANET_PROFILES = [
         "갈라진 흑요석 평원 아래로 용암이 빛난다.",
         "재구름이 하늘을 붉게 물들인다.",
         "행성 전체가 지각의 울림으로 진동한다.",
+        "밤마다 붉은 번개가 산맥을 가른다.",
       ],
       life: [
         "지열로 버티는 대장장이 도시가 살아남는다.",
         "불길을 숭배하는 부족이 용암 계곡을 지킨다.",
         "산업 카라반이 현무암을 수집한다.",
+        "광산의 열기가 곧 생명줄이 되는 세계다.",
       ],
       warning: [
         "테라포밍은 끊임없는 지각운동을 완화해야 한다.",
         "하룻밤 사이 지형이 바뀔 수 있다.",
         "차폐 시설이 없다면 정착은 불가능하다.",
+        "열 차폐와 내진 기반이 도시 생존의 조건이다.",
       ],
     },
   },
@@ -131,16 +143,19 @@ const PLANET_PROFILES = [
         "습도가 잠들지 않는 에메랄드 행성이다.",
         "거대한 캐노피가 초록의 바다처럼 출렁인다.",
         "안개가 낮게 깔려 강과 유적을 가린다.",
+        "바람이 스치면 숲 자체가 숨을 쉬는 듯 흔들린다.",
       ],
       life: [
         "거목에 매달린 공중 마을이 존재한다.",
         "발광 생물이 길을 밝힌다.",
         "탐험가들은 포자와 약물을 교환한다.",
+        "수분의 향이 도시의 리듬을 결정한다.",
       ],
       warning: [
         "테라포밍은 폭발적 성장률을 제어해야 한다.",
         "방치된 구조물은 곧 식물에 삼켜진다.",
         "공기 정화와 캐노피 매핑이 필수다.",
+        "생태 균형이 무너지면 도시가 숲에 흡수된다.",
       ],
     },
   },
@@ -155,16 +170,19 @@ const PLANET_PROFILES = [
         "영원한 황혼에 갇힌 희미한 세계다.",
         "오로라가 수평선을 가르며 흔들린다.",
         "차가운 태양 아래 긴 그림자가 뻗는다.",
+        "빛의 결이 느리게 흐르며 시간 감각이 달라진다.",
       ],
       life: [
         "관측소가 하늘의 신호를 추적한다.",
         "거울 도시가 어둠을 반사한다.",
         "고대 중계소를 수호하는 수도회가 있다.",
+        "빛을 모으는 신전이 도시의 중심을 이룬다.",
       ],
       warning: [
         "테라포밍은 인공 광주기가 핵심이다.",
         "에너지 생산이 제한적이며 공사가 길어진다.",
         "전력 분배 효율이 생존을 좌우한다.",
+        "광원 설계 없이는 정신적 안정도 유지하기 어렵다.",
       ],
     },
   },
@@ -179,16 +197,19 @@ const PLANET_PROFILES = [
         "형광빛 구름이 대기를 뒤덮는 독성 행성이다.",
         "산성 안개가 대륙을 녹이며 낮은 바다조차 말라붙었다.",
         "지표는 끈적한 황록색 균열로 갈라져 있다.",
+        "냄새 자체가 경보처럼 날카롭다.",
       ],
       life: [
         "포자 생명체가 거대한 군락을 이룬다.",
         "방독면을 쓴 정찰대만이 지상에 발을 딛는다.",
         "빛나는 곰팡이가 밤을 더 밝게 만든다.",
+        "정화 탑이 없으면 교역도 불가능하다.",
       ],
       warning: [
         "테라포밍은 독성 대기 정화가 최우선이다.",
         "호흡 장치 없이는 생존이 불가능하다.",
         "산성비가 구조물을 빠르게 부식시킨다.",
+        "방호 재료를 준비하지 않으면 정착은 즉시 실패한다.",
       ],
     },
   },
@@ -203,16 +224,73 @@ const PLANET_PROFILES = [
         "대기가 희박해 바다조차 형성되지 않는 건조 행성이다.",
         "보랏빛 구름이 낮게 맴돌며 전자 폭풍을 뿌린다.",
         "밤과 낮의 경계가 거의 사라진다.",
+        "기압이 낮아 대지의 소리조차 가볍다.",
       ],
       life: [
         "전기 생명체가 자기장에 붙어 살아간다.",
         "정착민은 지하 깊숙이 에너지 저장소를 만든다.",
         "여행자들은 별빛만으로 길을 찾는다.",
+        "기계화된 탐사대가 전면에 나서야 한다.",
       ],
       warning: [
         "테라포밍은 대기 생성부터 시작해야 한다.",
         "방전 폭풍이 장비를 무력화시킨다.",
         "광원과 방전 차폐가 필수다.",
+        "정착 전에 대형 전자 차폐망을 구축해야 한다.",
+      ],
+    },
+  },
+  {
+    key: "crystal",
+    palette: { primary: "#82d1ff", accent: "#ff8cf7" },
+    cloudColor: { tint: "#c7fff2" },
+    params: { seaLevelWorld: 0.03, beachBand: 0.015, foamBand: 0.012 },
+    lore: {
+      title: ["크리스탈 폴리아", "하이퍼리온 리프", "프리즘 리치"],
+      climate: [
+        "빛이 표면에서 수천 번 굴절되는 광채 행성이다.",
+        "광물성 대륙이 낮은 산맥처럼 지평선을 감싼다.",
+        "밤이 되면 대지가 스스로 빛을 낸다.",
+        "그림자가 거의 생기지 않을 만큼 반사가 강하다.",
+      ],
+      life: [
+        "수정 채굴 공동체가 행성의 심장을 감시한다.",
+        "빛을 먹는 생명체가 도시를 휘감는다.",
+        "탐사자들은 빛의 균열을 길로 삼는다.",
+        "에너지 장막이 방패처럼 흔들린다.",
+      ],
+      warning: [
+        "테라포밍은 광물 반사열을 통제해야 한다.",
+        "조명 설계가 도시의 안정을 결정한다.",
+        "하나의 균열이 대규모 전력 붕괴를 부를 수 있다.",
+        "표면 채굴은 반드시 제한되어야 한다.",
+      ],
+    },
+  },
+  {
+    key: "aurora",
+    palette: { primary: "#1d5f5b", accent: "#57f2e3" },
+    cloudColor: { tint: "#7dffe1" },
+    params: { seaLevelWorld: -0.06, beachBand: 0.04, foamBand: 0.02 },
+    lore: {
+      title: ["오로라 로움", "폴라 스케일", "새턴스 리브"],
+      climate: [
+        "대기가 두껍고 자력 소용돌이가 밤을 채운다.",
+        "극지방에서 형광 오로라가 바다를 가로지른다.",
+        "바람이 멈추는 순간조차 빛이 흐른다.",
+        "전장 같은 하늘이 매일 방향을 바꾼다.",
+      ],
+      life: [
+        "자기장 위를 달리는 비행도시가 존재한다.",
+        "빛을 추적하는 무역항이 해안을 따라 늘어선다.",
+        "전기 폭풍을 예측하는 집단이 질서를 만든다.",
+        "빛에 반응하는 생물권이 도시를 보호한다.",
+      ],
+      warning: [
+        "테라포밍은 자력 폭풍을 제어해야 한다.",
+        "통신 체계는 항상 변조에 대비해야 한다.",
+        "빛에 민감한 장비는 별도 차폐가 필요하다.",
+        "궤도 위 감시망이 필수다.",
       ],
     },
   },
@@ -228,6 +306,11 @@ function buildPreviewPlanets(): PlanetSummary[] {
   const picks = shuffled.slice(0, 3);
   return picks.map((profile, idx) => {
     const seed = Math.floor(Math.random() * 9999) + 1 + idx * 37;
+    const hue = (seed * 47) % 360;
+    const accentHue = (hue + 140 + idx * 13) % 360;
+    const primary = `hsl(${hue}, 55%, 45%)`;
+    const accent = `hsl(${accentHue}, 70%, 60%)`;
+    const cloud = `hsl(${(hue + 220) % 360}, 70%, 80%)`;
     return {
       id: `preview-${profile.key}-${seed}`,
       seed,
@@ -236,8 +319,16 @@ function buildPreviewPlanets(): PlanetSummary[] {
         biome: profile.key,
         lore: profile.lore,
       },
-      palette: profile.palette,
-      cloudColor: profile.cloudColor,
+      palette: {
+        ...profile.palette,
+        primary,
+        accent,
+      },
+      cloudColor: {
+        ...profile.cloudColor,
+        tint: cloud,
+        core: primary,
+      },
       projectId: null,
       city: null,
     };
@@ -288,15 +379,21 @@ function buildPlanetLore(planet: PlanetSummary) {
   const sea = typeof (planet.params as any)?.seaLevelWorld === "number" ? (planet.params as any).seaLevelWorld : 0;
   const seaLine =
     sea > 0.1
-      ? "바다가 거의 사라진 건조한 지형이 지배한다."
+      ? "바다가 거의 사라져 건조한 지형이 지배한다."
       : sea < -0.06
         ? "행성의 대부분은 깊은 바다와 습한 해양 지형이다."
         : "얕은 해안선이 군도처럼 흩어져 있다.";
   const colorLine = tone ? `지표는 ${tone} 빛을 띠며 독특한 광도를 가진다.` : "";
   const cloudLine = cloudTone ? `${cloudTone} 구름이 대기를 뒤덮어 하늘의 분위기를 바꾼다.` : "";
+  const habitability =
+    sea > 0.08
+      ? "거주지는 반드시 지하나 돔형 구조로 보호해야 한다."
+      : sea < -0.05
+        ? "도시는 해상 플랫폼 위에 세워야 안정적이다."
+        : "거주지는 해안과 내륙 사이의 완충 지대에 형성된다.";
   return {
     title,
-    lines: [climate, seaLine, colorLine, cloudLine, life, warning, extra].filter(Boolean),
+    lines: [climate, seaLine, colorLine, cloudLine, habitability, life, warning, extra].filter(Boolean),
   };
 }
 
@@ -484,7 +581,7 @@ export default function LandingPage() {
     setFocusedPlanet(customPlanets[0] ?? null);
   }, [customPlanets]);
 
-  const isCustomizing = customPlanets.length > 0;
+  const isCustomizing = pendingProjectId !== null && customPlanets.length > 0;
   const carouselPlanets = isCustomizing ? customPlanets : planets;
   const carouselActiveId = isCustomizing
     ? focusedPlanet?.id ?? customPlanets[0]?.id ?? null
@@ -520,6 +617,10 @@ export default function LandingPage() {
         alert(data.error?.message || "Failed to terraform planet");
         return;
       }
+      setCustomPlanets([]);
+      setPendingProjectId(null);
+      setPlacementMode(false);
+      setPlacement(null);
       router.push(`/p/${pendingProjectId}`);
     } catch {
       alert("Failed to terraform planet");
@@ -726,7 +827,7 @@ export default function LandingPage() {
         aria-hidden={viewMode !== "carousel"}
       >
         <div className="text-xs uppercase tracking-[0.2em] text-white/60">
-          {isCustomizing ? "Planet Lab" : "Planet"}
+          {isCustomizing ? "행성 연구소" : "행성 정보"}
         </div>
         <div className="mt-2 text-base font-semibold text-white/90">
           {story?.title ?? (focusedPlanet ? focusedPlanet.id.slice(0, 8) : "—")}
