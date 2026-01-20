@@ -52,19 +52,14 @@ export function PostVisualization({
   useCodeCityViewer(containerRef, viewerReady ? activeGraphData : null, { theme: currentTheme });
 
   useEffect(() => {
-    console.log(`📊 PostVisualization: graphData changed, historyIndex: ${historyIndex}`);
     if (!graphData) {
-      console.log("🌑 graphData is null, setting activeGraphData to null");
       setActiveGraphData(null);
       return;
     }
 
     if (historyIndex === -1 || !graphData.history || graphData.history.length === 0) {
-      console.log("📍 Using latest graph data");
       setActiveGraphData(graphData);
     } else {
-      console.log(`🕰️ Traveling to history index: ${historyIndex}`);
-      // ...
       const targetCommit = graphData.history[historyIndex];
       const snapshot = graphData.snapshots?.find((s) => s.hash === targetCommit.hash);
 
