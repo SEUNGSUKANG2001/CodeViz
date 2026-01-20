@@ -274,6 +274,7 @@ export default function LandingScene({
   planets = [],
   activePlanetId = null,
   onSelectPlanet,
+  onFocusPlanetChange,
 }) {
   const [dragOffset, setDragOffset] = useState(0);
   const [targetOffset, setTargetOffset] = useState(0);
@@ -338,10 +339,20 @@ export default function LandingScene({
     return () => window.removeEventListener("keydown", onKey);
   }, [mode, listLength, spacing]);
 
+  useEffect(() => {
+    if (mode !== "carousel") return;
+    if (!list.length) return;
+    const idx = Math.max(0, Math.min(list.length - 1, Math.round(-targetOffset / spacing)));
+    const focused = list[idx];
+    if (focused && onFocusPlanetChange) {
+      onFocusPlanetChange(focused);
+    }
+  }, [mode, targetOffset, spacing, list, onFocusPlanetChange]);
+
   return (
     <div className="h-full w-full bg-[#050814]">
       <Canvas
-        dpr={[1, 1.25]}
+        dpr={mode === "carousel" ? [1, 1] : [1, 1.25]}
         camera={{ position: targets.main.position, fov: 34, near: 0.1, far: 200 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         style={{ touchAction: "none" }}

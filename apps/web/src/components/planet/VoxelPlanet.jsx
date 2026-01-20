@@ -566,10 +566,12 @@ function Clouds3({ radius, seed, sunDir = [0.8, 0.3, 0.45] }) {
       vertexShader: `
         varying vec3 vN;
         varying vec3 vW;
+        varying vec3 vDir;
         void main() {
           vN = normalize(mat3(transpose(inverse(modelMatrix))) * normal);
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vW = wp.xyz;
+          vDir = normalize(position);
           gl_Position = projectionMatrix * viewMatrix * wp;
         }
       `,
@@ -592,6 +594,7 @@ function Clouds3({ radius, seed, sunDir = [0.8, 0.3, 0.45] }) {
 
         varying vec3 vN;
         varying vec3 vW;
+        varying vec3 vDir;
 
         float hash31(vec3 p){
           p = fract(p * 0.1031);
@@ -642,7 +645,7 @@ function Clouds3({ radius, seed, sunDir = [0.8, 0.3, 0.45] }) {
 
         void main() {
           vec3 N = normalize(vN);
-          vec3 dir = normalize(vW);
+          vec3 dir = normalize(vDir);
 
           vec3 flow = vec3(uTime*0.05, uTime*0.02, -uTime*0.03);
 
@@ -725,10 +728,12 @@ function CloudShadow({ radius, seed, sunDir = [0.8, 0.3, 0.45] }) {
       vertexShader: `
         varying vec3 vW;
         varying vec3 vN;
+        varying vec3 vDir;
         void main(){
           vN = normalize(mat3(transpose(inverse(modelMatrix))) * normal);
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vW = wp.xyz;
+          vDir = normalize(position);
           gl_Position = projectionMatrix * viewMatrix * wp;
         }
       `,
@@ -741,6 +746,7 @@ function CloudShadow({ radius, seed, sunDir = [0.8, 0.3, 0.45] }) {
 
         varying vec3 vW;
         varying vec3 vN;
+        varying vec3 vDir;
 
         float hash31(vec3 p){
           p = fract(p * 0.1031);
@@ -790,7 +796,7 @@ function CloudShadow({ radius, seed, sunDir = [0.8, 0.3, 0.45] }) {
         }
 
         void main(){
-          vec3 dir = normalize(vW);
+          vec3 dir = normalize(vDir);
 
           // ✅ "shadow projection": sample dir slightly shifted opposite sun (approx)
           vec3 L = normalize(uSun);

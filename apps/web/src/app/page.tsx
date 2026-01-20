@@ -31,6 +31,7 @@ export default function LandingPage() {
   const [planets, setPlanets] = useState<PlanetSummary[]>([]);
   const [defaultPlanetId, setDefaultPlanetId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"empty" | "main" | "carousel">("empty");
+  const [focusedPlanet, setFocusedPlanet] = useState<PlanetSummary | null>(null);
   const [repos, setRepos] = useState<any[]>([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
   const [showRepos, setShowRepos] = useState(false);
@@ -176,6 +177,13 @@ export default function LandingPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (viewMode !== "carousel") return;
+    if (focusedPlanet) return;
+    const fallback = planets.find((p) => p.id === defaultPlanetId) || planets[0] || null;
+    setFocusedPlanet(fallback);
+  }, [viewMode, focusedPlanet, planets, defaultPlanetId]);
+
   return (
     <main className="relative min-h-[200vh] overflow-hidden text-white">
       <div className="fixed inset-0 z-0 pointer-events-auto">
@@ -184,6 +192,7 @@ export default function LandingPage() {
           planets={planets}
           activePlanetId={defaultPlanetId}
           onSelectPlanet={handleSelectPlanet}
+          onFocusPlanetChange={setFocusedPlanet}
         />
       </div>
 
@@ -345,6 +354,24 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {viewMode === "carousel" && focusedPlanet && (
+        <div className="pointer-events-auto fixed bottom-16 right-10 z-[60] w-[320px] rounded-none border border-white/15 bg-white/5 p-4 text-sm text-white/85 backdrop-blur-[2px]">
+          <div className="text-xs uppercase tracking-[0.2em] text-white/60">Planet</div>
+          <div className="mt-2 text-base font-semibold text-white/90">
+            {focusedPlanet.id.slice(0, 8)}
+          </div>
+          <div className="mt-3 space-y-1 text-xs text-white/70">
+            <div>Seed: {focusedPlanet.seed}</div>
+            <div>Project: {focusedPlanet.projectId ?? "None"}</div>
+            <div>City: {focusedPlanet.city?.cityJsonKey ? "Attached" : "None"}</div>
+          </div>
+          <div className="mt-3 text-xs text-white/60">
+            Params: {Object.keys(focusedPlanet.params || {}).length} · Palette:{" "}
+            {Object.keys(focusedPlanet.palette || {}).length}
+          </div>
+        </div>
+      )}
 
       <section className="h-[100vh]" />
     </main>
