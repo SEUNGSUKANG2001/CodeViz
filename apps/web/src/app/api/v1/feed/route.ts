@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { successResponse } from '@/lib/errors';
+import { successResponse, ERR_INTERNAL } from '@/lib/errors';
 import {
   formatPostCard,
   parseCursor,
@@ -8,68 +8,73 @@ import {
 } from '@/lib/helpers';
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const sort = searchParams.get('sort') || 'latest';
-  const limit = Math.min(parseInt(searchParams.get('limit') || '24', 10), 100);
-  const cursor = searchParams.get('cursor');
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const sort = searchParams.get('sort') || 'latest';
+    const limit = Math.min(parseInt(searchParams.get('limit') || '24', 10), 100);
+    const cursor = searchParams.get('cursor');
 
-  const cursorData = parseCursor(cursor);
+    const cursorData = parseCursor(cursor);
 
-  const whereClause: Record<string, unknown> = {
-    visibility: 'public',
-  };
+    const whereClause: Record<string, unknown> = {
+      visibility: 'public',
+    };
 
-  if (cursorData) {
-    whereClause.OR = [
-      { createdAt: { lt: cursorData.createdAt } },
-      {
-        createdAt: cursorData.createdAt,
-        id: { lt: cursorData.id },
-      },
-    ];
-  }
+    if (cursorData) {
+      whereClause.OR = [
+        { createdAt: { lt: cursorData.createdAt } },
+        {
+          createdAt: cursorData.createdAt,
+          id: { lt: cursorData.id },
+        },
+      ];
+    }
 
-  let orderBy: Record<string, string>[];
-  if (sort === 'popular') {
-    orderBy = [{ createdAt: 'desc' }, { id: 'desc' }];
-  } else {
-    orderBy = [{ createdAt: 'desc' }, { id: 'desc' }];
-  }
+    let orderBy: Record<string, string>[];
+    if (sort === 'popular') {
+      orderBy = [{ createdAt: 'desc' }, { id: 'desc' }];
+    } else {
+      orderBy = [{ createdAt: 'desc' }, { id: 'desc' }];
+    }
 
-  const posts = await prisma.post.findMany({
-    where: whereClause,
-    include: {
-      author: true,
-      snapshot: {
-        include: {
-          job: true,
+    const posts = await prisma.post.findMany({
+      where: whereClause,
+      include: {
+        author: true,
+        snapshot: {
+          include: {
+            job: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+          },
         },
       },
-      _count: {
-        select: {
-          likes: true,
-          comments: true,
-        },
-      },
-    },
-    orderBy,
-    take: limit + 1,
-  });
+      orderBy,
+      take: limit + 1,
+    });
 
-  const hasMore = posts.length > limit;
-  const items = hasMore ? posts.slice(0, limit) : posts;
+    const hasMore = posts.length > limit;
+    const items = hasMore ? posts.slice(0, limit) : posts;
 
-  const nextCursor =
-    hasMore && items.length > 0
-      ? encodeCursor(items[items.length - 1].id, items[items.length - 1].createdAt)
-      : null;
+    const nextCursor =
+      hasMore && items.length > 0
+        ? encodeCursor(items[items.length - 1].id, items[items.length - 1].createdAt)
+        : null;
 
-  const formattedItems = items.map((post) => {
-    return formatPostCard(post, post.snapshot);
-  });
+    const formattedItems = items.map((post) => {
+      return formatPostCard(post, post.snapshot);
+    });
 
-  return successResponse({
-    items: formattedItems,
-    nextCursor,
-  });
+    return successResponse({
+      items: formattedItems,
+      nextCursor,
+    });
+  } catch (error: any) {
+    console.error('Error in /api/v1/feed:', error);
+    return ERR_INTERNAL(error.message || 'Internal Server Error');
+  }
 }
