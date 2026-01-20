@@ -130,6 +130,8 @@ export type PostDetail = {
       id: string;
       status: string;
     } | null;
+    history?: CommitInfo[];
+    snapshots?: Snapshot[];
   };
   projectLink: {
     projectId: string;

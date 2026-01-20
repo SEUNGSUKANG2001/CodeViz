@@ -90,27 +90,27 @@ export function ViewerShell({ projectId }: { projectId: string }) {
   const isJobDone = jobStatus === "done";
 
   return (
-    <div className="h-[100dvh] w-full bg-[#fbfbfc]">
+    <div className="h-[100dvh] w-full bg-[#050505]">
       {/* Header */}
-      <div className="flex h-16 items-center justify-between border-b border-neutral-200 px-6">
+      <div className="flex h-16 items-center justify-between border-b border-white/10 bg-black/40 px-6 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-8 w-8 rounded-2xl border border-neutral-300 bg-white">
-              <div className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-indigo-600" />
+            <div className="relative h-8 w-8 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md">
+              <div className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-indigo-500" />
             </div>
-            <span className="text-sm font-semibold tracking-[0.18em] text-neutral-900">CODEVIZ</span>
+            <span className="text-sm font-semibold tracking-[0.18em] text-white">CODEVIZ</span>
           </Link>
-          <span className="text-neutral-300">/</span>
-          <div className="font-medium text-neutral-700">{data?.title ?? "Loading..."}</div>
+          <span className="text-neutral-700">/</span>
+          <div className="font-medium text-white">{data?.title ?? "Loading..."}</div>
           {data && (
             <>
-              <span className="rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-xs text-neutral-600">
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-neutral-400">
                 {data.status}
               </span>
               {jobStatus && (
-                <span className={`rounded-full px-2 py-0.5 text-xs ${isJobDone
-                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                  : "border border-neutral-300 bg-white text-neutral-600"
+                <span className={`rounded-full px-2 py-0.5 text-xs border ${isJobDone
+                  ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+                  : "border-white/10 bg-white/5 text-neutral-400"
                   }`}>
                   Job: {jobStatus}
                 </span>
@@ -121,15 +121,21 @@ export function ViewerShell({ projectId }: { projectId: string }) {
 
         <div className="flex items-center gap-2">
           <Link
+            href="/feed"
+            className="rounded-full border border-white/10 bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+          >
+            Explore
+          </Link>
+          <Link
             href="/me"
-            className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
+            className="rounded-full border border-white/10 bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
           >
             My Page
           </Link>
           <button
             onClick={() => setPublishOpen(true)}
             disabled={!data || !isJobDone}
-            className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:bg-neutral-200 disabled:text-neutral-500"
+            className="rounded-full bg-white px-4 py-2 text-sm font-bold text-black transition hover:bg-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Publish
           </button>

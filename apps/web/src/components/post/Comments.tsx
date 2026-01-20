@@ -66,8 +66,8 @@ export function Comments({ postId, initialCount }: Props) {
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between">
-        <h3 className="text-lg font-semibold text-neutral-900">Comments</h3>
-        <span className="text-sm text-neutral-500">
+        <h3 className="text-xl font-bold text-white">Comments</h3>
+        <span className="text-sm font-medium text-neutral-500">
           {initialCount ?? items.length}
         </span>
       </div>
@@ -78,13 +78,13 @@ export function Comments({ postId, initialCount }: Props) {
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Write a comment..."
-          className="w-full min-h-[80px] rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-indigo-500 resize-none"
+          className="w-full min-h-[100px] rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-white outline-none placeholder:text-neutral-500 focus:ring-2 focus:ring-indigo-500/50 transition-all resize-none"
         />
         <div className="mt-3 flex justify-end">
           <button
             onClick={submit}
             disabled={posting || !body.trim()}
-            className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:bg-neutral-200 disabled:text-neutral-500"
+            className="rounded-full bg-white px-6 py-2 text-sm font-bold text-black hover:bg-neutral-200 disabled:opacity-50 transition-all active:scale-95"
           >
             {posting ? "Posting..." : "Post"}
           </button>
@@ -97,33 +97,33 @@ export function Comments({ postId, initialCount }: Props) {
       ) : items.length === 0 ? (
         <div className="py-8 text-center text-sm text-neutral-400">No comments yet.</div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {items.map((c) => (
-            <div key={c.id} className="flex gap-3">
-              <div className="h-8 w-8 rounded-full bg-neutral-100 overflow-hidden flex-shrink-0">
+            <div key={c.id} className="flex gap-4">
+              <div className="h-10 w-10 border border-white/10 rounded-full bg-white/5 overflow-hidden flex-shrink-0">
                 {c.author.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={c.author.avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs font-medium text-neutral-400">
+                  <div className="flex h-full w-full items-center justify-center text-xs font-medium text-neutral-500">
                     {c.author.displayName?.[0] ?? "U"}
                   </div>
                 )}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium text-neutral-900">
+                  <span className="font-semibold text-white">
                     {c.author.displayName ?? "User"}
                   </span>
-                  <span className="text-neutral-400">
+                  <span className="text-neutral-500">
                     @{c.author.username ?? "user"}
                   </span>
-                  <span className="h-1 w-1 rounded-full bg-neutral-300" />
-                  <span className="text-neutral-400">
+                  <span className="h-1 w-1 rounded-full bg-neutral-800" />
+                  <span className="text-neutral-500">
                     {new Date(c.createdAt).toLocaleDateString()}
                   </span>
                 </div>
-                <div className="mt-1 whitespace-pre-wrap text-sm text-neutral-700">
+                <div className="mt-1.5 whitespace-pre-wrap text-sm text-neutral-300 leading-relaxed">
                   {c.isDeleted ? (
                     <span className="text-neutral-400">(deleted)</span>
                   ) : (
@@ -137,13 +137,13 @@ export function Comments({ postId, initialCount }: Props) {
       )}
 
       {hasMore && (
-        <div>
+        <div className="pt-4">
           <button
             onClick={() => load(cursor)}
             disabled={loading}
-            className="rounded-full bg-neutral-100 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-200 disabled:opacity-50"
+            className="rounded-full border border-white/10 bg-white/5 px-6 py-2 text-sm font-medium text-neutral-300 hover:bg-white/10 transition-all active:scale-95 disabled:opacity-50"
           >
-            Load more
+            {loading ? "Loading..." : "Load more"}
           </button>
         </div>
       )}

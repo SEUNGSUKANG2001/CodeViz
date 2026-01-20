@@ -214,6 +214,12 @@ export default function LandingPage() {
             </Link>
 
             <div className="flex items-center gap-4">
+              <Link
+                href="/feed"
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 backdrop-blur-md transition hover:bg-white/10 hover:text-cyan-300"
+              >
+                Explore
+              </Link>
               {user ? (
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col items-end">

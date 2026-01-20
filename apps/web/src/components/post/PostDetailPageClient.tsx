@@ -13,6 +13,7 @@ import type { ThemeType } from "@/components/viewer/useCodeCityViewer";
 export function PostDetailPageClient({ postId }: { postId: string }) {
   const [post, setPost] = useState<PostDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isImmersive, setIsImmersive] = useState(false);
 
   const authorHref = useMemo(() => (post ? `/u/${post.author.id}` : "#"), [post]);
   const theme = (post?.snapshot.config?.theme as ThemeType) || "Thema1";
@@ -32,30 +33,33 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
   }, [postId]);
 
   return (
-    <main className="relative min-h-screen bg-[#fbfbfc] text-neutral-900">
+    <main className="relative min-h-screen bg-[#050505] text-white">
       {/* Background */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: `
-            radial-gradient(circle at 18% 12%, rgba(79,70,229,0.06), transparent 45%),
-            radial-gradient(circle at 80% 18%, rgba(0,0,0,0.06), transparent 46%),
-            linear-gradient(180deg, rgba(255,255,255,0.0) 0%, rgba(0,0,0,0.02) 100%)
-          `,
-        }}
-      />
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
+        <div
+          className="absolute -top-[10%] -left-[10%] h-[60%] w-[60%] rounded-full opacity-[0.15] blur-[120px]"
+          style={{ background: 'radial-gradient(circle, rgba(79,70,229,0.8), transparent 70%)' }}
+        />
+        <div
+          className="absolute -bottom-[10%] -right-[10%] h-[50%] w-[50%] rounded-full opacity-[0.1] blur-[120px]"
+          style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.4), transparent 70%)' }}
+        />
+      </div>
+
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.10]"
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
         style={{
           backgroundImage:
-            "linear-gradient(to right, rgba(0,0,0,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.12) 1px, transparent 1px)",
-          backgroundSize: "96px 96px",
+            "linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
         }}
       />
 
-      <TopNav />
+      <TopNav isAuthed={!!post} />
 
       <div className="relative z-10 mx-auto grid max-w-[1600px] grid-cols-1 gap-12 px-10 pt-8 pb-16 lg:grid-cols-[1fr_280px]">
         {/* Main */}
@@ -66,16 +70,16 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
             <>
               {/* Header */}
               <header className="space-y-4">
-                <h1 className="text-3xl font-semibold tracking-tight">
+                <h1 className="text-4xl font-bold tracking-tight text-white leading-tight">
                   {post.title}
                 </h1>
 
-                <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-500">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-400">
                   <Link
                     href={authorHref}
-                    className="flex items-center gap-2 hover:text-neutral-900"
+                    className="flex items-center gap-2 hover:text-white transition-colors"
                   >
-                    <div className="h-6 w-6 rounded-full bg-neutral-100 overflow-hidden">
+                    <div className="h-6 w-6 rounded-full bg-white/5 overflow-hidden ring-1 ring-white/10">
                       {post.author.avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -84,16 +88,16 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs font-medium text-neutral-400">
+                        <div className="flex h-full w-full items-center justify-center text-[10px] font-medium text-neutral-500">
                           {post.author.displayName?.[0] ?? "U"}
                         </div>
                       )}
                     </div>
-                    <span>{post.author.displayName ?? "User"}</span>
+                    <span className="font-medium">{post.author.displayName ?? "User"}</span>
                   </Link>
 
-                  <span className="h-1 w-1 rounded-full bg-neutral-300" />
-                  <span>
+                  <span className="h-1 w-1 rounded-full bg-neutral-800" />
+                  <span className="text-neutral-500">
                     {new Date(post.createdAt).toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "short",
@@ -106,7 +110,7 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
                       {post.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600"
+                          className="rounded-full bg-white/5 border border-white/5 px-2 py-0.5 text-xs text-neutral-400"
                         >
                           {tag}
                         </span>
@@ -115,12 +119,12 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
                   )}
 
                   {post.projectLink?.projectId && (
-                    <Link
-                      href={`/p/${post.projectLink.projectId}`}
-                      className="ml-auto rounded-full bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-800"
+                    <button
+                      onClick={() => setIsImmersive(true)}
+                      className="ml-auto rounded-full bg-white px-4 py-1.5 text-sm font-bold text-black hover:bg-neutral-200 transition-all active:scale-95"
                     >
                       Open in Viewer
-                    </Link>
+                    </button>
                   )}
                 </div>
               </header>
@@ -133,20 +137,25 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
                   coverUrl={post.snapshot.coverUrl}
                   title={post.title}
                   theme={theme}
+                  immersive={isImmersive}
+                  onClose={() => setIsImmersive(false)}
+                  projectId={post.projectLink?.projectId ?? null}
+                  history={post.snapshot.history}
+                  snapshots={post.snapshot.snapshots}
                 />
               </div>
 
               {/* Body */}
               {post.body && (
                 <div className="mt-10">
-                  <p className="whitespace-pre-wrap text-neutral-700 leading-relaxed">
+                  <p className="whitespace-pre-wrap text-neutral-300 leading-relaxed text-lg">
                     {post.body}
                   </p>
                 </div>
               )}
 
               {/* Comments */}
-              <div className="mt-12 pt-8 border-t border-neutral-200">
+              <div className="mt-12 pt-8 border-t border-white/10">
                 <Comments postId={postId} initialCount={post.counts.comments} />
               </div>
             </>
