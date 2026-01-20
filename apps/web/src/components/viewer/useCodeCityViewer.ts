@@ -62,9 +62,139 @@ const THEME_CONFIG: Record<ThemeType, { character: string; lastBuilding: string 
  * 행성의 반지름과 중심점 좌표를 정의합니다.
  */
 const PLANET_CONFIG = {
-  RADIUS: 4000,
-  CENTER_Z: -4000,
+  RADIUS: 2.35,
+  CENTER_Z: -2.35,
 };
+const SUN_POS = new THREE.Vector3(-30, 22, -18);
+
+function makeRadialTexture(stops: Array<[number, string]>, size = 256) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  for (const [at, col] of stops) g.addColorStop(at, col);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const t = new THREE.CanvasTexture(canvas);
+  t.minFilter = THREE.LinearMipMapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  return t;
+}
+
+function createSunSprite() {
+  const coreTex = makeRadialTexture([
+    [0.0, "rgba(255,250,235,1.0)"],
+    [0.15, "rgba(255,230,170,0.9)"],
+    [0.35, "rgba(255,190,110,0.5)"],
+    [1.0, "rgba(0,0,0,0.0)"],
+  ]);
+  const haloTex = makeRadialTexture([
+    [0.0, "rgba(0,0,0,0.0)"],
+    [0.4, "rgba(255,200,120,0.15)"],
+    [0.75, "rgba(140,170,255,0.12)"],
+    [1.0, "rgba(0,0,0,0.0)"],
+  ]);
+
+  const group = new THREE.Group();
+  if (haloTex) {
+    const halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: haloTex,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      })
+    );
+    halo.scale.set(34, 34, 1);
+    group.add(halo);
+  }
+  if (coreTex) {
+    const core = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: coreTex,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      })
+    );
+    core.scale.set(14, 14, 1);
+    group.add(core);
+  }
+  return group;
+}
+
+function createStarField(count = 2500, radius = 90) {
+  const tex = makeRadialTexture(
+    [
+      [0.0, "rgba(255,255,255,1.0)"],
+      [0.7, "rgba(255,255,255,0.8)"],
+      [1.0, "rgba(255,255,255,0.0)"],
+    ],
+    64
+  );
+  const geom = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const u = Math.random();
+    const v = Math.random();
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
+    const r = radius * (0.85 + Math.random() * 0.15);
+    positions[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.cos(phi);
+    positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+  geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.7,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+    map: tex ?? undefined,
+    alphaTest: 0.2,
+  });
+  return new THREE.Points(geom, mat);
+}
+
+function createNebula(radius = 95, sunDir = new THREE.Vector3(0.8, 0.3, 0.45)) {
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms: {
+      uTop: { value: new THREE.Color("#0b1135") },
+      uBottom: { value: new THREE.Color("#02030b") },
+      uSun: { value: sunDir.clone().normalize() },
+    },
+    vertexShader: `
+      varying vec3 vDir;
+      void main(){
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vDir = normalize(wp.xyz);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uTop;
+      uniform vec3 uBottom;
+      uniform vec3 uSun;
+      varying vec3 vDir;
+      void main(){
+        float h = clamp((vDir.y + 1.0) * 0.5, 0.0, 1.0);
+        vec3 col = mix(uBottom, uTop, h);
+        float glow = pow(max(dot(vDir, normalize(uSun)),0.0), 12.0) * 0.25;
+        col += glow * vec3(1.0,0.8,0.5);
+        gl_FragColor = vec4(col,1.0);
+      }
+    `,
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 48), mat);
+  return mesh;
+}
 
 
 
@@ -104,6 +234,8 @@ export function useCodeCityViewer(
   const mtlLoaderRef = useRef(new MTLLoader());
   const gltfLoaderRef = useRef(new GLTFLoader());
   const starFieldRef = useRef<THREE.Points | null>(null);
+  const sunSpriteRef = useRef<THREE.Group | null>(null);
+  const nebulaRef = useRef<THREE.Mesh | null>(null);
   const planetUpdateRef = useRef<((dt: number) => void) | null>(null);
 
   const { RADIUS: R, CENTER_Z: Cz } = PLANET_CONFIG;
@@ -345,7 +477,7 @@ export function useCodeCityViewer(
     const chordDist = Math.hypot(start.x - end.x, start.y - end.y, start.z - end.z);
 
     // 곡선의 높이를 행성 반지름보다 충분히 높게 설정 (클리핑 방지)
-    const height = R + 10 + chordDist * 0.05;
+    const height = R + 0.03 + chordDist * 0.02;
     const ratio = height / dist;
 
     const cpx = cx * ratio;
@@ -391,8 +523,14 @@ export function useCodeCityViewer(
 
         const box = new THREE.Box3().setFromObject(charObj);
         const size = box.getSize(new THREE.Vector3());
-        const scale = 7.5 / (Math.max(size.x, size.y, size.z) || 1);
+        const scale = (R * 0.003) / (Math.max(size.x, size.y, size.z) || 1);
         charObj.scale.set(scale, scale, scale);
+        charObj.traverse((child) => {
+          if ((child as any).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
 
         const g = new THREE.Group();
         g.add(charObj);
@@ -440,7 +578,7 @@ export function useCodeCityViewer(
         // 기본 시점 (도시 모드) - 많은 건물이 한눈에 들어오도록 각도를 틀고 거리를 확보함
         graphRef.current.camera().up.set(0, 1, 0);
         graphRef.current.cameraPosition(
-          { x: 3000, y: 3000, z: Cz + 7000 },
+          { x: 0, y: R * 1.6, z: Cz + R * 2.8 },
           { x: 0, y: 0, z: Cz },
           1000
         );
@@ -487,7 +625,7 @@ export function useCodeCityViewer(
     }
     const south = north.clone().negate();
 
-    const dist = 800; // 카메라 높이
+    const dist = R * 1.2; // 카메라 높이
     const camPos = nodePos.clone()
       .add(normal.clone().multiplyScalar(dist))
       .add(south.clone().multiplyScalar(dist));
@@ -509,7 +647,7 @@ export function useCodeCityViewer(
     if (!graphRef.current) return;
 
     graphRef.current.cameraPosition(
-      { x: 0, y: R * 1.5, z: Cz + R * 1.5 },
+      { x: 0, y: R * 1.5, z: Cz + R * 2.6 },
       { x: 0, y: 0, z: Cz },
       1500
     );
@@ -550,8 +688,14 @@ export function useCodeCityViewer(
       charObj.rotation.y = Math.PI;
       const box = new THREE.Box3().setFromObject(charObj);
       const size = box.getSize(new THREE.Vector3());
-      const scale = 7.5 / (Math.max(size.x, size.y, size.z) || 1);
+      const scale = (R * 0.003) / (Math.max(size.x, size.y, size.z) || 1);
       charObj.scale.set(scale, scale, scale);
+      charObj.traverse((child) => {
+        if ((child as any).isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
       const g = new THREE.Group();
       g.add(charObj);
       CHARACTER_MODEL.current = g;
@@ -571,7 +715,7 @@ export function useCodeCityViewer(
       .cooldownTicks(60) // 조금 더 길게 주어 안정적으로 멈추게 함
       .nodeThreeObject((node: CityNode) => {
         const group = new THREE.Group();
-        const scale = Math.max(12, Math.log(node.lineCount || 10) * 12);
+        const scale = Math.max(R * 0.008, Math.log(node.lineCount || 10) * R * 0.005);
         const config = THEME_CONFIG[themeRef.current];
         if (!config || themeRef.current === "2D") return group;
 
@@ -599,6 +743,13 @@ export function useCodeCityViewer(
             // -Math.PI/2 회전 후에는 모델의 원래 Y축이 부모의 Z축이 됨
             obj.position.z = minY;
 
+            obj.traverse((child) => {
+              if ((child as any).isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
             obj.scale.set(scale, scale, scale);
             group.add(obj);
           })
@@ -618,8 +769,9 @@ export function useCodeCityViewer(
       });
 
     // 물리 엔진 설정 (노드 간 거리 및 중심 억제)
-    Graph.d3Force("charge")?.strength(-1500); // 척력
-    Graph.d3Force("link")?.distance(300); // 링크 간 거리
+    Graph.d3Force("charge")?.strength(-2); // 척력
+    Graph.d3Force("link")?.distance(R * 0.08); // 링크 간 거리
+    Graph.d3Force("link")?.strength(0.9); // 인력 강화
     Graph.d3Force("center", null); // 행성 표면에 고정하므로 중앙 집중력 제거
 
     // 링크(파일 의존성)를 도로 및 움직이는 캐릭터로 시각화
@@ -647,7 +799,7 @@ export function useCodeCityViewer(
           new THREE.Vector3(0, 0, 0),
           new THREE.Vector3(0, 0, 0)
         );
-        const geometry = new THREE.TubeGeometry(curve, 20, 4, 8, false);
+        const geometry = new THREE.TubeGeometry(curve, 8, R * 0.002, 6, false);
         const material = new THREE.MeshBasicMaterial({
           color: 0x333333,
           transparent: true,
@@ -667,7 +819,7 @@ export function useCodeCityViewer(
         if (roadMesh) {
           const curve = getCurve(start, end);
           if (roadMesh.geometry) roadMesh.geometry.dispose(); // 기존 지오메트리 해제 (메모리 절약)
-          roadMesh.geometry = new THREE.TubeGeometry(curve, 20, 4, 8, false);
+          roadMesh.geometry = new THREE.TubeGeometry(curve, 8, R * 0.002, 6, false);
         }
         // 그룹 자체는 원점에 두어 자식들(캐릭터 등)이 전역 좌표를 그대로 쓸 수 있게 함
         obj.position.set(0, 0, 0);
@@ -675,7 +827,7 @@ export function useCodeCityViewer(
       });
 
     // 핑크색 선택 링 초기화
-    const ringGeo = new THREE.RingGeometry(80, 90, 32);
+    const ringGeo = new THREE.RingGeometry(R * 0.025, R * 0.035, 32);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xff1493, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
     const selectionRing = new THREE.Mesh(ringGeo, ringMat);
     selectionRing.visible = false;
@@ -739,56 +891,72 @@ export function useCodeCityViewer(
 
     // 6-1. 배경 별(Starfield) 생성
     if (!starFieldRef.current) {
-      const starsGeo = new THREE.BufferGeometry();
-      const count = 2000;
-      const positions = new Float32Array(count * 3);
-      for (let i = 0; i < count * 3; i++) {
-        positions[i] = (Math.random() - 0.5) * 15000;
-      }
-      starsGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 3 });
-      const stars = new THREE.Points(starsGeo, starsMat);
-      starFieldRef.current = stars;
+      starFieldRef.current = createStarField();
     }
     scene.add(starFieldRef.current);
 
+    if (!nebulaRef.current) {
+      nebulaRef.current = createNebula(95, SUN_POS.clone().normalize());
+    }
+    scene.add(nebulaRef.current);
+
+    if (!sunSpriteRef.current) {
+      sunSpriteRef.current = createSunSprite();
+      sunSpriteRef.current.position
+        .copy(SUN_POS)
+        .normalize()
+        .multiplyScalar(90);
+    }
+    scene.add(sunSpriteRef.current);
+
     // 6-2. 바닥(Ground Sphere / Procedural Planet) 생성
-    const voxelPlanet = createVoxelPlanet({ seed: 1, radius: R });
+    const voxelPlanet = createVoxelPlanet({
+      seed: 1,
+      radius: R,
+      sunDir: [SUN_POS.x, SUN_POS.y, SUN_POS.z],
+    });
     voxelPlanet.group.position.set(0, 0, Cz);
     scene.add(voxelPlanet.group);
     planetUpdateRef.current = voxelPlanet.update;
     (Graph as any).__voxelPlanet = voxelPlanet; // Store for cleanup
 
-    // 6-3. 조명 설정
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.45));
+    // 6-3. 조명 설정 (landing page match)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.02));
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 3.5);
-    dirLight.position.set(1000, 3500, 3500);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 3.0);
+    dirLight.position.copy(SUN_POS);
     dirLight.castShadow = true;
 
     // 그림자 품질 및 범위 설정
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.left = -5000;
-    dirLight.shadow.camera.right = 5000;
-    dirLight.shadow.camera.top = 5000;
-    dirLight.shadow.camera.bottom = -5000;
-    dirLight.shadow.camera.far = 10000;
+    dirLight.shadow.camera.left = -R * 6;
+    dirLight.shadow.camera.right = R * 6;
+    dirLight.shadow.camera.top = R * 6;
+    dirLight.shadow.camera.bottom = -R * 6;
+    dirLight.shadow.camera.near = R * 0.1;
+    dirLight.shadow.camera.far = R * 20;
     dirLight.shadow.bias = -0.001;
 
     scene.add(dirLight);
     scene.add(dirLight.target);
-    dirLight.target.position.set(0, 0, 0);
+    dirLight.target.position.set(0, 0, Cz);
 
     // 렌더러 그림자 활성화
     const renderer = Graph.renderer();
     if (renderer) {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     }
 
     // 초기 카메라 위치 (데이터가 배치되기 전의 아주 먼 시점)
-    Graph.cameraPosition({ x: 0, y: 0, z: Cz + 15000 }, { x: 0, y: 0, z: Cz }, 0);
+    Graph.cameraPosition({ x: 0, y: 0, z: Cz + R * 6 }, { x: 0, y: 0, z: Cz }, 0);
+    const controls = Graph.controls();
+    if (controls) {
+      controls.minDistance = R * 0.15;
+      controls.maxDistance = R * 50;
+    }
 
     // 캐릭터 애니메이션 루프 (도로 위를 왕복)
     let raf = 0;
@@ -802,9 +970,9 @@ export function useCodeCityViewer(
           const curve = getCurve(s, t);
           const point = curve.getPoint(time);
 
-          // 도로 두께(4)만큼 살짝 위로 띄움 (법선 방향)
+          // 도로 두께만큼 살짝 위로 띄움 (법선 방향)
           const nodeNormal = point.clone().sub(new THREE.Vector3(0, 0, Cz)).normalize();
-          obj.position.copy(point).add(nodeNormal.multiplyScalar(4));
+          obj.position.copy(point).add(nodeNormal.multiplyScalar(R * 0.008));
 
           // 진행 방향 및 업벡터(표면 법선)를 고려한 회전
           const nextTime = Math.min(time + 0.005, 1);

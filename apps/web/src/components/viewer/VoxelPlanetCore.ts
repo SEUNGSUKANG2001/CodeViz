@@ -554,12 +554,13 @@ export function createVoxelPlanet({
 }): VoxelPlanet {
     const group = new THREE.Group();
     const sun = new THREE.Vector3(...sunDir).normalize();
+    const segments = 72;
 
-    // 1. Geography
+    // 1. Geography (marching cubes, landing-page style)
     const density = makePlanetDensity({ seed, radius });
     const geom = buildGeometry({
         density,
-        gridSize: 128,
+        gridSize: 72,
         boxSize: radius * 2.5,
         isoLevel: 0.0,
         radius,
@@ -571,10 +572,11 @@ export function createVoxelPlanet({
     });
     const mat = new THREE.MeshStandardMaterial({
         vertexColors: true,
-        roughness: 0.8,
-        metalness: 0.2,
+        roughness: 0.85,
+        metalness: 0.05,
     });
     const mesh = new THREE.Mesh(geom, mat);
+    mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
 
@@ -593,12 +595,13 @@ export function createVoxelPlanet({
         vertexShader: waterVS,
         fragmentShader: waterFS,
     });
-    const waterGeom = new THREE.SphereGeometry(waterR, 128, 128);
+    const waterGeom = new THREE.SphereGeometry(waterR, segments, segments);
     const waterMesh = new THREE.Mesh(waterGeom, waterMat);
+    waterMesh.receiveShadow = true;
     group.add(waterMesh);
 
     // 3. Atmosphere
-    const thickness = 0.6 * (radius / 2.35); // scale thickness with radius
+    const thickness = Math.min(radius * 0.08, 45); // keep atmosphere sane at large scales
     const atmoMat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
@@ -619,7 +622,7 @@ export function createVoxelPlanet({
         vertexShader: atmosphereVS,
         fragmentShader: atmosphereFS,
     });
-    const atmoGeom = new THREE.SphereGeometry(radius + thickness, 96, 96);
+    const atmoGeom = new THREE.SphereGeometry(radius + thickness, segments, segments);
     const atmoMesh = new THREE.Mesh(atmoGeom, atmoMat);
     group.add(atmoMesh);
 
@@ -647,7 +650,7 @@ export function createVoxelPlanet({
             vertexShader: cloudVS,
             fragmentShader: cloudFS,
         });
-        const cGeom = new THREE.SphereGeometry(radius * scale, 48, 48);
+        const cGeom = new THREE.SphereGeometry(radius * scale, segments, segments);
         const cMesh = new THREE.Mesh(cGeom, cMat);
         return { mesh: cMesh, mat: cMat, geom: cGeom };
     }
