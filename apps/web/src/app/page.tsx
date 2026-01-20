@@ -116,14 +116,14 @@ export default function LandingPage() {
         <PlanetBackground feedItems={feed} scrollProgress={scrollProgress} />
       </div>
 
-      <section className="relative z-10 min-h-[100vh] px-10 pt-8">
+      <section className="relative z-10 min-h-[100vh] px-10 pt-8 pointer-events-none">
         <div
           className="mx-auto flex max-w-[1600px] flex-col"
           style={{
             transform: `translateY(${-scrollProgress * 120}px)`,
           }}
         >
-          <header className="flex items-center justify-between">
+          <header className="flex items-center justify-between pointer-events-auto">
             <Link href="/" className="flex items-center gap-3">
               <div className="relative h-9 w-9 rounded-none border border-white/15 bg-white/5">
                 <div className="absolute left-2 top-2 h-2 w-2 rounded-full bg-cyan-300" />
@@ -174,7 +174,7 @@ export default function LandingPage() {
             </div>
           </header>
 
-          <div className="mt-20 max-w-3xl">
+          <div className="mt-20 max-w-3xl pointer-events-auto">
             <div
               className="inline-flex items-center gap-2 rounded-none border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] text-white/85"
               style={{ textShadow: "0 2px 18px rgba(0,0,0,0.6)" }}

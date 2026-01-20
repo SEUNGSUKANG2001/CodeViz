@@ -59,9 +59,9 @@ function makeRadialTexture(stops, size = 256) {
 }
 
 function makeLabelTexture(lines) {
-  const width = 540;
-  const height = 230;
-  const padding = 26;
+  const width = 520;
+  const height = 300;
+  const padding = 28;
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -69,28 +69,35 @@ function makeLabelTexture(lines) {
   const ctx = canvas.getContext("2d");
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "rgba(8, 12, 24, 0.86)";
+  ctx.fillStyle = "rgba(6, 10, 22, 0.9)";
   ctx.fillRect(0, 0, width, height);
-  ctx.strokeStyle = "rgba(120, 230, 255, 0.4)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(2, 2, width - 4, height - 4);
+  const band = ctx.createLinearGradient(0, 0, width, 0);
+  band.addColorStop(0, "rgba(120, 220, 255, 0.22)");
+  band.addColorStop(1, "rgba(120, 220, 255, 0.0)");
+  ctx.fillStyle = band;
+  ctx.fillRect(0, 0, width, 6);
+  ctx.strokeStyle = "rgba(120, 220, 255, 0.45)";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(3, 3, width - 6, height - 6);
 
   ctx.textBaseline = "top";
   ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.font = "600 36px ui-sans-serif, system-ui, -apple-system";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+  ctx.shadowBlur = 8;
+  ctx.font = "600 34px ui-sans-serif, system-ui, -apple-system";
   ctx.fillText(lines[0] ?? "", padding, padding);
 
   ctx.fillStyle = "rgba(255,255,255,0.78)";
-  ctx.font = "400 26px ui-sans-serif, system-ui, -apple-system";
-  ctx.fillText(lines[1] ?? "", padding, padding + 54);
+  ctx.font = "400 24px ui-sans-serif, system-ui, -apple-system";
+  ctx.fillText(lines[1] ?? "", padding, padding + 58);
 
   ctx.fillStyle = "rgba(255,255,255,0.6)";
-  ctx.font = "400 24px ui-sans-serif, system-ui, -apple-system";
-  ctx.fillText(lines[2] ?? "", padding, padding + 96);
+  ctx.font = "400 22px ui-sans-serif, system-ui, -apple-system";
+  ctx.fillText(lines[2] ?? "", padding, padding + 104);
 
-  ctx.fillStyle = "rgba(140, 220, 255, 0.95)";
-  ctx.font = "600 24px ui-sans-serif, system-ui, -apple-system";
-  ctx.fillText(lines[3] ?? "", padding, padding + 140);
+  ctx.fillStyle = "rgba(140, 220, 255, 0.98)";
+  ctx.font = "600 22px ui-sans-serif, system-ui, -apple-system";
+  ctx.fillText(lines[3] ?? "", padding, padding + 154);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.minFilter = THREE.LinearFilter;
@@ -263,34 +270,87 @@ function CameraRig({
   exploreActive,
   focusActive,
   cameraPosRef,
+  orbitCenterRef,
+  selectedPlanetRef,
+  focusHeightRef,
 }) {
   const { camera } = useThree();
 
   const currentTarget = useRef(new THREE.Vector3(...startTarget));
   const desiredPos = useRef(new THREE.Vector3());
   const desiredTarget = useRef(new THREE.Vector3());
+  const baseQuat = useRef(null);
+  const focusQuatRef = useRef(null);
+  const focusBasisRef = useRef({
+    right: new THREE.Vector3(),
+    up: new THREE.Vector3(),
+    forward: new THREE.Vector3(),
+  });
+  const focusTemp = useMemo(() => new THREE.Vector3(), []);
 
   const startPosVec = useMemo(() => new THREE.Vector3(...startCameraPos), [startCameraPos]);
   const endPosVec = useMemo(() => new THREE.Vector3(...endCameraPos), [endCameraPos]);
   const startTargetVec = useMemo(() => new THREE.Vector3(...startTarget), [startTarget]);
   const endTargetVec = useMemo(() => new THREE.Vector3(...endTarget), [endTarget]);
+  const arcOffset = useMemo(() => new THREE.Vector3(0, 1, 0), []);
+  const followDir = useMemo(() => new THREE.Vector3(1, 0, 0), []);
+  const followPos = useMemo(() => new THREE.Vector3(), []);
+  const endPosSnap = useMemo(() => new THREE.Vector3(...endCameraPos), [endCameraPos]);
 
   useFrame((_, dt) => {
+    if (!baseQuat.current) {
+      baseQuat.current = camera.quaternion.clone();
+    }
+    const endReached =
+      progress >= 0.98 && camera.position.distanceTo(endPosSnap) < 1.2;
     if (exploreActive && exploreRef.current) {
       desiredPos.current.copy(exploreRef.current.position);
       desiredTarget.current.copy(exploreRef.current.target);
     } else if (focusActive && focusRef.current) {
-      desiredPos.current.copy(focusRef.current.position);
-      desiredTarget.current.copy(focusRef.current.target);
+      if (selectedPlanetRef?.current && orbitCenterRef?.current) {
+        const planetPos = selectedPlanetRef.current.position;
+        const height =
+          typeof focusHeightRef?.current === "number"
+            ? focusHeightRef.current
+            : camera.position.y;
+        if (!focusQuatRef.current) {
+          focusQuatRef.current = camera.quaternion.clone();
+          focusBasisRef.current.right.set(1, 0, 0).applyQuaternion(focusQuatRef.current);
+          focusBasisRef.current.up.set(0, 1, 0).applyQuaternion(focusQuatRef.current);
+          focusBasisRef.current.forward.set(0, 0, -1).applyQuaternion(focusQuatRef.current);
+        }
+
+        const { right, up } = focusBasisRef.current;
+        focusTemp.subVectors(planetPos, camera.position);
+        const dx = focusTemp.dot(right);
+        const dy = focusTemp.dot(up);
+        desiredPos.current.copy(camera.position);
+        desiredPos.current.addScaledVector(right, dx);
+        desiredPos.current.addScaledVector(up, dy);
+        desiredPos.current.setY(height);
+        desiredTarget.current.copy(planetPos);
+      } else {
+        desiredPos.current.copy(focusRef.current.position);
+        desiredTarget.current.copy(focusRef.current.target);
+      }
     } else {
       const t = smoothstep(0.0, 1.0, progress);
       lerpVec3(desiredPos.current, startPosVec, endPosVec, t);
       lerpVec3(desiredTarget.current, startTargetVec, endTargetVec, t);
+      const arc = Math.sin(Math.PI * t) * 1.6;
+      desiredPos.current.addScaledVector(arcOffset, arc);
     }
 
-    expDamp(camera.position, desiredPos.current, 6.0, dt);
-    expDamp(currentTarget.current, desiredTarget.current, 6.0, dt);
-    camera.lookAt(currentTarget.current);
+    expDamp(camera.position, desiredPos.current, 5.0, dt);
+    expDamp(currentTarget.current, desiredTarget.current, 5.0, dt);
+    if (exploreActive) {
+      focusQuatRef.current = null;
+    } else if (focusActive && focusQuatRef.current) {
+      camera.quaternion.copy(focusQuatRef.current);
+    } else if (!focusActive) {
+      focusQuatRef.current = null;
+      camera.lookAt(currentTarget.current);
+    }
 
     if (cameraPosRef) {
       cameraPosRef.current.copy(camera.position);
@@ -304,6 +364,11 @@ function CameraRig({
 
 function AlienPlanet({ planet, appearance, onPick }) {
   const group = useRef(null);
+  const hitSphere = useMemo(
+    () => new THREE.Sphere(new THREE.Vector3(), planet.radius * 1.1),
+    [planet.radius]
+  );
+  const hitPoint = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((_, dt) => {
     if (!group.current) return;
@@ -321,9 +386,26 @@ function AlienPlanet({ planet, appearance, onPick }) {
     [onPick, planet]
   );
 
+  const hitRaycast = useCallback(
+    (raycaster, intersects) => {
+      if (!group.current) return;
+      hitSphere.center.copy(group.current.position);
+      const hit = raycaster.ray.intersectSphere(hitSphere, hitPoint);
+      if (hit) {
+        intersects.push({
+          distance: raycaster.ray.origin.distanceTo(hit),
+          point: hit.clone(),
+          object: group.current,
+        });
+      }
+    },
+    [hitSphere, hitPoint]
+  );
+
   return (
     <group
       ref={group}
+      raycast={hitRaycast}
       onPointerDown={(e) => {
         e.stopPropagation();
         onPick?.(planet, null, null);
@@ -356,9 +438,12 @@ function OrbitSystem({
   onExplore,
   selectedPlanetRef,
 }) {
+  const { camera, gl, raycaster } = useThree();
   const lineRef = useRef(null);
   const labelRef = useRef(null);
-  const labelScaleRef = useRef(new THREE.Vector3(2.3, 1.0, 1));
+  const labelScaleRef = useRef(new THREE.Vector3(3.8, 2.1, 1));
+  const pickSphere = useMemo(() => new THREE.Sphere(), []);
+  const pickPoint = useMemo(() => new THREE.Vector3(), []);
 
   const appear = smoothstep(0.45, 0.75, scrollProgress);
   const appearance = useMemo(() => {
@@ -371,7 +456,7 @@ function OrbitSystem({
   const items = useMemo(() => {
     const arr = Array.isArray(feedItems) ? feedItems.slice(0, 8) : [];
     if (arr.length === 0) {
-      return new Array(8).fill(0).map((_, i) => ({
+      return new Array(5).fill(0).map((_, i) => ({
         postId: `dummy-${i}`,
         title: `Popular Planet ${i + 1}`,
         author: { username: "user" },
@@ -383,10 +468,10 @@ function OrbitSystem({
   }, [feedItems]);
 
   const planets = useMemo(() => {
-    const N = Math.min(8, items.length);
+    const N = Math.min(5, items.length);
     const out = [];
-    const baseR = 9.5;
-    const maxR = 15.5;
+    const baseR = 12.0;
+    const maxR = 26.0;
     const baseSpeed = 2.4;
 
     for (let i = 0; i < N; i++) {
@@ -394,9 +479,13 @@ function OrbitSystem({
       const id = it.postId || it.id || `p-${i}`;
       const seed = hash01(String(id));
       const r = baseR + seed * (maxR - baseR);
-      const angle = (i / N) * Math.PI * 2 + seed;
+      const angle = (i / N) * Math.PI * 2 + seed * 2.0;
       const speed = baseSpeed / Math.pow(r, 1.5);
-      const yOffset = (seed - 0.5) * 1.6;
+      const yOffset = (seed - 0.5) * 2.4;
+      const eccentricity = 0.08 + seed * 0.32;
+      const semiMinor = r * (1 - eccentricity * 0.6);
+      const orbitNode = seed * Math.PI * 2;
+      const orbitInclination = (seed - 0.5) * 0.9;
 
       out.push({
         id,
@@ -418,9 +507,12 @@ function OrbitSystem({
           .normalize()
           .toArray(),
         orbitRadius: r,
+        orbitSemiMinor: semiMinor,
         orbitAngle: angle,
         orbitSpeed: speed,
         orbitYOffset: yOffset,
+        orbitNode,
+        orbitInclination,
         position: new THREE.Vector3(),
       });
     }
@@ -468,14 +560,76 @@ function OrbitSystem({
     return geo;
   }, []);
 
+  useEffect(() => {
+    if (!gl?.domElement) return;
+    const handlePointer = (event) => {
+      if (appearance.opacity < 0.05) return;
+      const target = event.target;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag && ["button", "input", "textarea", "select", "a"].includes(tag)) return;
+
+      const rect = gl.domElement.getBoundingClientRect();
+      if (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      ) {
+        return;
+      }
+
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera({ x, y }, camera);
+
+      if (labelRef.current && selectedPlanet) {
+        const labelHits = raycaster.intersectObject(labelRef.current, true);
+        if (labelHits.length > 0) {
+          onExplore?.(selectedPlanet);
+          return;
+        }
+      }
+
+      let hitPlanet = null;
+      let hitDistance = Infinity;
+      let hitPoint = null;
+      let hitNormal = null;
+
+      for (const p of planets) {
+        pickSphere.center.copy(p.position);
+        pickSphere.radius = p.radius * 1.1;
+        const hit = raycaster.ray.intersectSphere(pickSphere, pickPoint);
+        if (!hit) continue;
+        const dist = raycaster.ray.origin.distanceTo(hit);
+        if (dist < hitDistance) {
+          hitDistance = dist;
+          hitPlanet = p;
+          hitPoint = hit.clone();
+          hitNormal = hit.clone().sub(p.position).normalize();
+        }
+      }
+
+      if (hitPlanet) {
+        onPlanetPick?.(hitPlanet, hitPoint, hitNormal);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointer, { passive: true });
+    return () => window.removeEventListener("pointerdown", handlePointer);
+  }, [appearance.opacity, camera, gl, onExplore, onPlanetPick, planets, raycaster, selectedPlanet]);
+
+  const tempVec = useMemo(() => new THREE.Vector3(), []);
   useFrame(({ clock, camera }) => {
     const t = clock.getElapsedTime();
     for (const p of planets) {
       const a = p.orbitAngle + t * p.orbitSpeed;
+      tempVec.set(Math.cos(a) * p.orbitRadius, 0, Math.sin(a) * p.orbitSemiMinor);
+      tempVec.applyAxisAngle(new THREE.Vector3(0, 1, 0), p.orbitNode);
+      tempVec.applyAxisAngle(new THREE.Vector3(1, 0, 0), p.orbitInclination);
       p.position.set(
-        orbitCenter.x + Math.cos(a) * p.orbitRadius,
-        orbitCenter.y + p.orbitYOffset,
-        orbitCenter.z + Math.sin(a) * p.orbitRadius
+        orbitCenter.x + tempVec.x,
+        orbitCenter.y + tempVec.y + p.orbitYOffset,
+        orbitCenter.z + tempVec.z
       );
     }
 
@@ -533,7 +687,7 @@ function OrbitSystem({
           if (selectedPlanet) onExplore?.(selectedPlanet);
         }}
       >
-        <planeGeometry args={[2.3, 1.0]} />
+        <planeGeometry args={[3.8, 2.1]} />
         <primitive object={labelMaterial} attach="material" />
       </mesh>
     </group>
@@ -548,12 +702,20 @@ export default function PlanetBackground({
   planetOffset = [-2.2, -0.35, 0],
   sunPos = [-30, 22, -18],
   startCameraPos = [-2.281, 0.364, 3.009],
-  endCameraPos = [0.5, 0.4, 11.5],
   startTarget = [-2.385, 0.445, 2.863],
-  endTarget = [-0.8, 0.2, 0.0],
+  endCameraPos,
+  endTarget,
   fov = 34,
 }) {
   const orbitCenter = useMemo(() => new THREE.Vector3(...planetOffset), [planetOffset]);
+  const resolvedEndCameraPos = useMemo(() => {
+    if (endCameraPos) return endCameraPos;
+    return [orbitCenter.x, orbitCenter.y + 60, orbitCenter.z + 34];
+  }, [endCameraPos, orbitCenter]);
+  const resolvedEndTarget = useMemo(() => {
+    if (endTarget) return endTarget;
+    return [orbitCenter.x, orbitCenter.y, orbitCenter.z];
+  }, [endTarget, orbitCenter]);
   const [selectedPlanet, setSelectedPlanet] = useState(null);
   const [exploreMode, setExploreMode] = useState(false);
 
@@ -561,6 +723,7 @@ export default function PlanetBackground({
   const exploreRef = useRef(null);
   const cameraPosRef = useRef(new THREE.Vector3(...startCameraPos));
   const selectedPlanetRef = useRef(null);
+  const focusHeightRef = useRef(startCameraPos[1]);
 
   const setFocus = useCallback(
     (planet) => {
@@ -570,6 +733,7 @@ export default function PlanetBackground({
         setExploreMode(false);
         return;
       }
+      focusHeightRef.current = cameraPosRef.current.y;
       const dir = new THREE.Vector3().subVectors(cameraPosRef.current, planet.position).normalize();
       const camPos = new THREE.Vector3().copy(planet.position).addScaledVector(dir, 7.5);
       focusRef.current = {
@@ -615,8 +779,11 @@ export default function PlanetBackground({
         dpr={[1, 1.25]}
         camera={{ position: startCameraPos, fov, near: 0.1, far: 260 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
-        onCreated={({ gl }) => {
+        eventSource={document.body}
+        eventPrefix="client"
+        onCreated={({ gl, camera }) => {
           gl.setClearColor(new THREE.Color("#050814"), 1);
+          camera.lookAt(...startTarget);
         }}
       >
         <NebulaBackdrop radius={95} sunDir={new THREE.Vector3(...sunPos).normalize().toArray()} />
@@ -626,15 +793,18 @@ export default function PlanetBackground({
 
         <CameraRig
           startCameraPos={startCameraPos}
-          endCameraPos={endCameraPos}
+          endCameraPos={resolvedEndCameraPos}
           startTarget={startTarget}
-          endTarget={endTarget}
+          endTarget={resolvedEndTarget}
           progress={scrollProgress}
           focusRef={focusRef}
           exploreRef={exploreRef}
           exploreActive={exploreMode}
           focusActive={!exploreMode && !!selectedPlanet}
           cameraPosRef={cameraPosRef}
+          orbitCenterRef={{ current: orbitCenter }}
+          selectedPlanetRef={selectedPlanetRef}
+          focusHeightRef={focusHeightRef}
         />
 
         {exploreMode && selectedPlanet && (
