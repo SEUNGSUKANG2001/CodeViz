@@ -23,8 +23,12 @@ export default function LandingPage() {
   const [user, setUser] = useState<Author | null>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [targetProgress, setTargetProgress] = useState(0);
+  const [repos, setRepos] = useState<any[]>([]);
+  const [fetchingRepos, setFetchingRepos] = useState(false);
+  const [showRepos, setShowRepos] = useState(false);
   const progressRef = useRef(0);
   const isAnimatingRef = useRef(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
   const DEBUG_PLANET = false;
@@ -43,6 +47,16 @@ export default function LandingPage() {
     };
     window.addEventListener("wheel", onWheel, { passive: true });
     return () => window.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowRepos(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -76,12 +90,32 @@ export default function LandingPage() {
         setFeed(feedRes.data.items);
         if (meRes.ok) {
           setUser(meRes.data.user);
+          fetchRepos();
         }
       } catch {
         // Silently fail for feed/auth
       }
     })();
   }, []);
+
+  async function fetchRepos() {
+    setFetchingRepos(true);
+    try {
+      const res = await apiFetch<{ ok: boolean; data: { repos: any[] } }>("/api/v1/users/me/github-repos");
+      if (res.ok) {
+        setRepos(res.data.repos);
+      }
+    } catch (e) {
+      console.error("Failed to fetch repos", e);
+    } finally {
+      setFetchingRepos(false);
+    }
+  }
+
+  const handleSelectRepo = (repo: any) => {
+    setRepoUrl(repo.htmlUrl);
+    setShowRepos(false);
+  };
 
   const onTransform = async () => {
     if (!repoUrl) return;
@@ -143,7 +177,7 @@ export default function LandingPage() {
                     <button
                       onClick={async () => {
                         await fetch("/api/v1/auth/logout", { method: "POST" });
-                        setUser(null);
+                        window.location.reload();
                       }}
                       className="text-[10px] text-white/40 hover:text-white/60"
                     >
@@ -176,10 +210,16 @@ export default function LandingPage() {
 
           <div className="mt-20 max-w-3xl pointer-events-auto">
             <div
-              className="inline-flex items-center gap-2 rounded-none border border-white/15 bg-white/5 px-4 py-1.5 text-[11px] text-white/85"
-              style={{ textShadow: "0 2px 18px rgba(0,0,0,0.6)" }}
+              className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/5 px-4 py-1.5 text-[11px] font-medium tracking-widest text-cyan-300/90 uppercase"
+              style={{
+                textShadow: "0 0 12px rgba(34, 211, 238, 0.4)",
+                boxShadow: "inset 0 0 12px rgba(34, 211, 238, 0.05)"
+              }}
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-300"></span>
+              </span>
               Code as spatial structure
             </div>
 
@@ -205,6 +245,7 @@ export default function LandingPage() {
                   <input
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
+                    onFocus={() => setShowRepos(true)}
                     placeholder="Paste GitHub repository URL"
                     className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/45"
                   />
@@ -223,6 +264,34 @@ export default function LandingPage() {
                 >
                   {loading ? "Transforming..." : "Transform"}
                 </button>
+              </div>
+
+              <div className="relative" ref={dropdownRef}>
+                {showRepos && (repos.length > 0 || fetchingRepos) && (
+                  <div className="absolute left-0 right-0 top-2 z-50 max-h-60 overflow-y-auto border border-white/15 bg-neutral-900/90 backdrop-blur-md p-1 shadow-2xl">
+                    {fetchingRepos ? (
+                      <p className="px-4 py-3 text-xs text-white/40 italic">Fetching your repositories...</p>
+                    ) : (
+                      <>
+                        <p className="px-3 py-2 text-[10px] font-semibold text-white/30 uppercase tracking-[0.2em]">
+                          Your GitHub Repositories
+                        </p>
+                        {repos.map((repo) => (
+                          <button
+                            key={repo.fullName}
+                            onClick={() => handleSelectRepo(repo)}
+                            className="w-full px-4 py-3 text-left text-sm hover:bg-white/5 transition-colors flex flex-col gap-1 border-b border-white/5 last:border-0"
+                          >
+                            <span className="font-medium text-white/90">{repo.fullName}</span>
+                            {repo.description && (
+                              <span className="text-xs text-white/40 line-clamp-1">{repo.description}</span>
+                            )}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div

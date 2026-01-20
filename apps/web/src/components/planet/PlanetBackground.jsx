@@ -60,8 +60,8 @@ function makeRadialTexture(stops, size = 256) {
 
 function makeLabelTexture(lines) {
   const width = 520;
-  const height = 300;
-  const padding = 28;
+  const height = 360;
+  const padding = 32;
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -69,35 +69,76 @@ function makeLabelTexture(lines) {
   const ctx = canvas.getContext("2d");
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "rgba(6, 10, 22, 0.9)";
+
+  // -- Background with glass-like effect --
+  ctx.fillStyle = "rgba(4, 7, 18, 0.94)";
   ctx.fillRect(0, 0, width, height);
+
+  // -- Accents & Glass highlights --
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "rgba(34, 211, 238, 0.1)");
+  gradient.addColorStop(1, "rgba(34, 211, 238, 0.0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // -- Top Scanning Bar --
   const band = ctx.createLinearGradient(0, 0, width, 0);
-  band.addColorStop(0, "rgba(120, 220, 255, 0.22)");
-  band.addColorStop(1, "rgba(120, 220, 255, 0.0)");
+  band.addColorStop(0, "rgba(34, 211, 238, 0.4)");
+  band.addColorStop(0.5, "rgba(34, 211, 238, 0.1)");
+  band.addColorStop(1, "rgba(34, 211, 238, 0.4)");
   ctx.fillStyle = band;
-  ctx.fillRect(0, 0, width, 6);
-  ctx.strokeStyle = "rgba(120, 220, 255, 0.45)";
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(3, 3, width - 6, height - 6);
+  ctx.fillRect(0, 0, width, 4);
 
+  // -- Corner Brackets (Futuristic Style) --
+  const cl = 24; // corner length
+  ctx.strokeStyle = "rgba(34, 211, 238, 0.6)";
+  ctx.lineWidth = 2.5;
+
+  // Top-Left
+  ctx.beginPath(); ctx.moveTo(padding / 2, padding / 2 + cl); ctx.lineTo(padding / 2, padding / 2); ctx.lineTo(padding / 2 + cl, padding / 2); ctx.stroke();
+  // Bottom-Right
+  ctx.beginPath(); ctx.moveTo(width - padding / 2 - cl, height - padding / 2); ctx.lineTo(width - padding / 2, height - padding / 2); ctx.lineTo(width - padding / 2, height - padding / 2 - cl); ctx.stroke();
+
+  // -- UI Elements: Decorative scanning lines --
+  ctx.strokeStyle = "rgba(34, 211, 238, 0.08)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 6; i++) {
+    ctx.beginPath();
+    ctx.moveTo(padding, i * 45 + height / 3);
+    ctx.lineTo(width - padding, i * 45 + height / 3);
+    ctx.stroke();
+  }
+
+  // -- Text Shadow --
+  ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+  ctx.shadowBlur = 12;
+
+  // -- Title (Lines[0]) --
   ctx.textBaseline = "top";
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
-  ctx.shadowBlur = 8;
-  ctx.font = "600 34px ui-sans-serif, system-ui, -apple-system";
-  ctx.fillText(lines[0] ?? "", padding, padding);
+  ctx.fillStyle = "rgba(255, 255, 255, 1.0)";
+  ctx.font = "700 38px 'Inter', ui-sans-serif, system-ui";
+  ctx.fillText(lines[0] ?? "", padding, padding + 10);
 
-  ctx.fillStyle = "rgba(255,255,255,0.78)";
-  ctx.font = "400 24px ui-sans-serif, system-ui, -apple-system";
-  ctx.fillText(lines[1] ?? "", padding, padding + 58);
+  // -- Underline --
+  ctx.fillStyle = "rgba(34, 211, 238, 0.3)";
+  ctx.fillRect(padding, padding + 60, 120, 3);
 
-  ctx.fillStyle = "rgba(255,255,255,0.6)";
-  ctx.font = "400 22px ui-sans-serif, system-ui, -apple-system";
-  ctx.fillText(lines[2] ?? "", padding, padding + 104);
+  // -- Stats (Lines[1]) --
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.font = "500 24px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillText(lines[1] ?? "", padding, padding + 78);
 
-  ctx.fillStyle = "rgba(140, 220, 255, 0.98)";
-  ctx.font = "600 22px ui-sans-serif, system-ui, -apple-system";
-  ctx.fillText(lines[3] ?? "", padding, padding + 154);
+  // -- Metadata (Lines[2]) --
+  ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+  ctx.font = "400 21px ui-sans-serif, system-ui";
+  ctx.fillText(lines[2] ?? "".toUpperCase(), padding, padding + 128);
+
+  // -- Action Prompt (Lines[3]) --
+  const actionText = lines[3] ?? "VIEW ARCHIVE";
+  ctx.fillStyle = "rgba(34, 211, 238, 0.9)";
+  ctx.font = "700 22px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.letterSpacing = "2px";
+  ctx.fillText(`> ${actionText}`, padding, height - padding - 30);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.minFilter = THREE.LinearFilter;
@@ -441,7 +482,7 @@ function OrbitSystem({
   const { camera, gl, raycaster } = useThree();
   const lineRef = useRef(null);
   const labelRef = useRef(null);
-  const labelScaleRef = useRef(new THREE.Vector3(3.8, 2.1, 1));
+  const labelScaleRef = useRef(new THREE.Vector3(3.8, 2.6, 1));
   const pickSphere = useMemo(() => new THREE.Sphere(), []);
   const pickPoint = useMemo(() => new THREE.Vector3(), []);
 
@@ -456,13 +497,22 @@ function OrbitSystem({
   const items = useMemo(() => {
     const arr = Array.isArray(feedItems) ? feedItems.slice(0, 8) : [];
     if (arr.length === 0) {
-      return new Array(5).fill(0).map((_, i) => ({
-        postId: `dummy-${i}`,
-        title: `Popular Planet ${i + 1}`,
-        author: { username: "user" },
-        likeCount: 10 + i * 7,
-        commentCount: 2 + i,
-      }));
+      return new Array(5).fill(0).map((_, i) => {
+        const dummyTitles = [
+          "Nebula-7 Archive",
+          "Vertex Core Registry",
+          "Distributed Mesh-Nodes",
+          "Quantum Ledger V2",
+          "Hyperlayer Fragment"
+        ];
+        return {
+          postId: `dummy-${i}`,
+          title: dummyTitles[i] || `Protocol Alpha-${i}`,
+          author: { username: "core-node" },
+          likeCount: 128 + i * 42,
+          commentCount: 16 + i * 4,
+        };
+      });
     }
     return arr;
   }, [feedItems]);
@@ -668,12 +718,12 @@ function OrbitSystem({
   return (
     <group>
       {planets.map((p) => (
-      <AlienPlanet
-        key={p.id}
-        planet={p}
-        appearance={appearance}
-        onPick={onPlanetPick}
-      />
+        <AlienPlanet
+          key={p.id}
+          planet={p}
+          appearance={appearance}
+          onPick={onPlanetPick}
+        />
       ))}
 
       <line ref={lineRef} geometry={lineGeometry}>
@@ -687,7 +737,7 @@ function OrbitSystem({
           if (selectedPlanet) onExplore?.(selectedPlanet);
         }}
       >
-        <planeGeometry args={[3.8, 2.1]} />
+        <planeGeometry args={[3.8, 2.6]} />
         <primitive object={labelMaterial} attach="material" />
       </mesh>
     </group>

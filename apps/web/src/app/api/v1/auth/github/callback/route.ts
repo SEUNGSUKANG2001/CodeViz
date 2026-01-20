@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
         const user = await findOrCreateUserByProvider('github', String(githubUser.id), {
             nickname: githubUser.login,
             profileImage: githubUser.avatar_url,
+            accessToken: tokenData.access_token,
         });
 
         // 4. 세션 생성 및 쿠키 설정

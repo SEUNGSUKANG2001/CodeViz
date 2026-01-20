@@ -96,13 +96,7 @@ export async function destroySession(): Promise<void> {
     });
   }
 
-  cookieStore.set(SESSION_COOKIE_NAME, '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 0,
-  });
+  cookieStore.delete(SESSION_COOKIE_NAME);
 }
 
 export async function findOrCreateUserByProvider(
@@ -111,6 +105,7 @@ export async function findOrCreateUserByProvider(
   profile: {
     nickname?: string;
     profileImage?: string;
+    accessToken?: string;
   }
 ): Promise<User> {
   const existingIdentity = await prisma.userIdentity.findUnique({
@@ -124,6 +119,12 @@ export async function findOrCreateUserByProvider(
   });
 
   if (existingIdentity) {
+    if (profile.accessToken && existingIdentity.accessToken !== profile.accessToken) {
+      await prisma.userIdentity.update({
+        where: { id: existingIdentity.id },
+        data: { accessToken: profile.accessToken },
+      });
+    }
     return existingIdentity.user;
   }
 
@@ -135,6 +136,7 @@ export async function findOrCreateUserByProvider(
         create: {
           provider,
           providerUserId,
+          accessToken: profile.accessToken || null,
         },
       },
     },

@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     githubAuthUrl.searchParams.set('redirect_uri', redirectUri);
     githubAuthUrl.searchParams.set('state', state);
     githubAuthUrl.searchParams.set('scope', 'read:user user:email');
+    githubAuthUrl.searchParams.set('prompt', 'login');
 
     return NextResponse.redirect(githubAuthUrl.toString());
 }
