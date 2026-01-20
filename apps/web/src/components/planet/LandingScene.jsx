@@ -178,52 +178,71 @@ function CameraRig({ mode, targets }) {
   const targetRef = useRef(new THREE.Vector3(...targets.main.target));
   const desiredPos = useRef(new THREE.Vector3());
   const desiredTarget = useRef(new THREE.Vector3());
+  const dampingRef = useRef(2.0);
+  const modeRef = useRef(mode);
+  const prevModeRef = useRef(mode);
+  const transitionRef = useRef({
+    active: false,
+    t: 0,
+    fromPos: new THREE.Vector3(),
+    toPos: new THREE.Vector3(),
+    fromTarget: new THREE.Vector3(),
+    toTarget: new THREE.Vector3(),
+    control: new THREE.Vector3(),
+  });
 
   useFrame((_, dt) => {
     const conf = targets[mode] || targets.main;
     desiredPos.current.set(...conf.position);
     desiredTarget.current.set(...conf.target);
 
-    expDamp(camera.position, desiredPos.current, 2.5, dt);
-    expDamp(targetRef.current, desiredTarget.current, 2.5, dt);
+    if (modeRef.current !== mode) {
+      prevModeRef.current = mode;
+      modeRef.current = mode;
+      transitionRef.current.active = mode === "carousel";
+      transitionRef.current.t = 0;
+      const startPos =
+        mode === "carousel"
+          ? new THREE.Vector3(...targets.main.position)
+          : camera.position.clone();
+      const startTarget =
+        mode === "carousel"
+          ? new THREE.Vector3(...targets.main.target)
+          : targetRef.current.clone();
+      transitionRef.current.fromPos.copy(startPos);
+      transitionRef.current.toPos.copy(desiredPos.current);
+      transitionRef.current.fromTarget.copy(startTarget);
+      transitionRef.current.toTarget.copy(desiredTarget.current);
+      camera.position.copy(startPos);
+      targetRef.current.copy(startTarget);
+      const mid = transitionRef.current.fromPos.clone().lerp(transitionRef.current.toPos, 0.5);
+      const dist = transitionRef.current.fromPos.distanceTo(transitionRef.current.toPos);
+      const arc = Math.max(1.2, dist * 0.25);
+      transitionRef.current.control.set(mid.x, mid.y + arc, mid.z + arc * 0.4);
+    }
+
+    if (transitionRef.current.active) {
+      const speed = 0.8;
+      transitionRef.current.t = Math.min(1, transitionRef.current.t + dt * speed);
+      const t = transitionRef.current.t;
+      camera.position.lerpVectors(
+        transitionRef.current.fromPos,
+        transitionRef.current.toPos,
+        t
+      );
+      targetRef.current.lerpVectors(
+        transitionRef.current.fromTarget,
+        transitionRef.current.toTarget,
+        t
+      );
+      if (t >= 1) transitionRef.current.active = false;
+    } else {
+      expDamp(camera.position, desiredPos.current, dampingRef.current, dt);
+      expDamp(targetRef.current, desiredTarget.current, dampingRef.current, dt);
+    }
+
     camera.lookAt(targetRef.current);
   });
-
-  return null;
-}
-
-function CarouselDragControls({ enabled, dragOffset, setDragOffset }) {
-  const dragRef = useRef({ active: false, startX: 0, startOffset: 0 });
-
-  useEffect(() => {
-    if (!enabled) return;
-    const onPointerDown = (e) => {
-      const target = e.target;
-      if (target?.closest?.("input, textarea, button, select, a")) return;
-      e.preventDefault();
-      if (e.button !== 0) return;
-      dragRef.current.active = true;
-      dragRef.current.startX = e.clientX;
-      dragRef.current.startOffset = dragOffset;
-    };
-    const onPointerMove = (e) => {
-      if (!dragRef.current.active) return;
-      const delta = (e.clientX - dragRef.current.startX) / 120;
-      setDragOffset(dragRef.current.startOffset + delta);
-    };
-    const onPointerUp = () => {
-      dragRef.current.active = false;
-    };
-
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    };
-  }, [enabled, dragOffset, setDragOffset]);
 
   return null;
 }
@@ -309,7 +328,7 @@ export default function LandingScene({
     () => ({
       empty: { position: [0, 0, 16], target: [0, 0, 0] },
       main: { position: [-2.281, 0.364, 3.009], target: [-2.385, 0.445, 2.863] },
-      carousel: { position: [0, 0.8, 9.5], target: [0, 0, 0] },
+      carousel: { position: [0, 3, 9.5], target: [0, -0.2, 0] },
     }),
     []
   );
@@ -366,11 +385,6 @@ export default function LandingScene({
         <ambientLight intensity={0.08} />
 
         <CameraRig mode={mode} targets={targets} />
-        <CarouselDragControls
-          enabled={mode === "carousel"}
-          dragOffset={dragOffset}
-          setDragOffset={setDragOffset}
-        />
         <CarouselLerp
           enabled={mode === "carousel"}
           targetOffset={targetOffset}

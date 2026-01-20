@@ -42,6 +42,7 @@ export default function LandingPage() {
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
       if (!user) return;
+      if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) return;
       if (wheelLockRef.current) return;
       if (Math.abs(e.deltaY) < 2) return;
       if (e.deltaY > 0) {
@@ -198,9 +199,9 @@ export default function LandingPage() {
 
       <section className="relative z-10 min-h-[100vh] px-10 pt-8 pointer-events-none">
         <div
-          className="mx-auto flex max-w-[1600px] flex-col"
+          className="mx-auto flex max-w-[1600px] flex-col transition-transform duration-[2400ms] ease-in-out"
           style={{
-            transform: viewMode === "carousel" ? "translateY(-120px)" : "translateY(0)",
+            transform: viewMode === "carousel" ? "translateY(-100vh)" : "translateY(0)",
           }}
         >
           <header className="flex items-center justify-between pointer-events-auto">
@@ -355,23 +356,29 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {viewMode === "carousel" && focusedPlanet && (
-        <div className="pointer-events-auto fixed bottom-16 right-10 z-[60] w-[320px] rounded-none border border-white/15 bg-white/5 p-4 text-sm text-white/85 backdrop-blur-[2px]">
-          <div className="text-xs uppercase tracking-[0.2em] text-white/60">Planet</div>
-          <div className="mt-2 text-base font-semibold text-white/90">
-            {focusedPlanet.id.slice(0, 8)}
-          </div>
-          <div className="mt-3 space-y-1 text-xs text-white/70">
-            <div>Seed: {focusedPlanet.seed}</div>
-            <div>Project: {focusedPlanet.projectId ?? "None"}</div>
-            <div>City: {focusedPlanet.city?.cityJsonKey ? "Attached" : "None"}</div>
-          </div>
-          <div className="mt-3 text-xs text-white/60">
-            Params: {Object.keys(focusedPlanet.params || {}).length} · Palette:{" "}
-            {Object.keys(focusedPlanet.palette || {}).length}
-          </div>
+      <div
+        className="pointer-events-auto fixed bottom-16 right-10 z-[60] w-[320px] rounded-none border border-white/15 bg-white/5 p-4 text-sm text-white/85 backdrop-blur-[2px] transition-[transform,opacity] duration-[2400ms] ease-in-out"
+        style={{
+          transform: viewMode === "carousel" ? "translateY(0)" : "translateY(100vh)",
+          pointerEvents: viewMode === "carousel" ? "auto" : "none",
+          opacity: viewMode === "carousel" ? 1 : 0,
+        }}
+        aria-hidden={viewMode !== "carousel"}
+      >
+        <div className="text-xs uppercase tracking-[0.2em] text-white/60">Planet</div>
+        <div className="mt-2 text-base font-semibold text-white/90">
+          {focusedPlanet ? focusedPlanet.id.slice(0, 8) : "—"}
         </div>
-      )}
+        <div className="mt-3 space-y-1 text-xs text-white/70">
+          <div>Seed: {focusedPlanet?.seed ?? "—"}</div>
+          <div>Project: {focusedPlanet?.projectId ?? "None"}</div>
+          <div>City: {focusedPlanet?.city?.cityJsonKey ? "Attached" : "None"}</div>
+        </div>
+        <div className="mt-3 text-xs text-white/60">
+          Params: {Object.keys(focusedPlanet?.params || {}).length} · Palette:{" "}
+          {Object.keys(focusedPlanet?.palette || {}).length}
+        </div>
+      </div>
 
       <section className="h-[100vh]" />
     </main>
