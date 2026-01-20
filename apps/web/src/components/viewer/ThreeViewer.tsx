@@ -19,6 +19,7 @@ type Props = {
   loading?: boolean;
   theme?: ThemeType;
   onThemeChange?: (theme: ThemeType) => void;
+  onCaptureReady?: (captureFn: () => Promise<string>) => void;
 };
 
 /**
@@ -26,7 +27,7 @@ type Props = {
  * - 분석 결과(JSON)를 S3에서 가져와 3D 시각화를 화면에 표시합니다.
  * - 프로젝트의 분석 작업(AnalysisJob) 상태에 따라 로딩 스크린, 에러 메시지 등을 보여줍니다.
  */
-export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange }: Props) {
+export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange, onCaptureReady }: Props) {
   // 3D 캔버스가 렌더링될 DOM 요소에 대한 Ref
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +63,7 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
   /**
    * 3D 시각화 엔진 초기화 커스텀 훅
    */
-  const { graphRef, resetCamera, focusOnNode, highlightNode } = useCodeCityViewer(
+  const { graphRef, resetCamera, focusOnNode, highlightNode, captureScreenshot } = useCodeCityViewer(
     containerRef,
     viewerReady ? activeGraphData : null,
     {
@@ -71,6 +72,12 @@ export function ThreeViewer({ project, loading, theme = "Thema1", onThemeChange 
       onBackgroundClick: () => onBackgroundClickRef.current?.(),
     }
   );
+
+  useEffect(() => {
+    if (captureScreenshot && onCaptureReady) {
+      onCaptureReady(captureScreenshot);
+    }
+  }, [captureScreenshot, onCaptureReady]);
 
   const handleNodeSelect = useCallback((node: any) => {
     if (!node) return;

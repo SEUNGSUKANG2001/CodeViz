@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import {
@@ -67,16 +66,29 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
   }
 
-  const snapshot = await prisma.snapshot.create({
-    data: {
-      projectId,
-      jobId: body.jobId || null,
-      config: body.config as Prisma.InputJsonValue,
-      coverUrl,
-    },
-    include: {
-      job: true,
-    },
+  const snapshot = await prisma.$transaction(async (tx: any) => {
+    const s = await tx.snapshot.create({
+      data: {
+        projectId,
+        jobId: body.jobId || null,
+        config: body.config as any,
+        coverUrl,
+      },
+      include: {
+        job: true,
+      },
+    });
+
+    // Also update project's coverUrl and status
+    await tx.project.update({
+      where: { id: projectId },
+      data: {
+        coverUrl: coverUrl || undefined,
+        status: 'ready',
+      },
+    });
+
+    return s;
   });
 
   return successResponse({

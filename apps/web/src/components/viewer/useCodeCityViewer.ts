@@ -1162,11 +1162,26 @@ export function useCodeCityViewer(
     [focusOnNode]
   );
 
+  /**
+   * Capture 3D Canvas as a dataURL
+   */
+  const captureScreenshot = useCallback(async (): Promise<string> => {
+    if (!graphRef.current) return "";
+    const renderer = graphRef.current.renderer();
+    const scene = graphRef.current.scene();
+    const camera = graphRef.current.camera();
+    if (!renderer || !scene || !camera) return "";
+
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL("image/png");
+  }, []);
+
   return {
     graphRef,
     changeTheme,
     resetCamera,
     focusOnNode,
     highlightNode,
+    captureScreenshot,
   };
 }

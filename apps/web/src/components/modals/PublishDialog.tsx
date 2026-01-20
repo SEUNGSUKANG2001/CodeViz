@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import type { CreateSnapshotResponse, CreatePostResponse } from "@/lib/types";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Props = {
   open: boolean;
@@ -13,6 +13,7 @@ type Props = {
   repoUrl: string;
   currentConfig: Record<string, unknown>;
   latestJobId: string | null;
+  captureScreenshot?: (() => Promise<string>) | null;
 };
 
 export function PublishDialog({
@@ -22,6 +23,7 @@ export function PublishDialog({
   repoUrl,
   currentConfig,
   latestJobId,
+  captureScreenshot,
 }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -36,6 +38,83 @@ export function PublishDialog({
 
     setLoading(true);
     try {
+      let coverUploadId = null;
+
+      // 0) Capture and Upload Screenshot
+      if (captureScreenshot) {
+        try {
+          console.log("[Publish] Capturing screenshot...");
+          const dataUrl = await captureScreenshot();
+
+          if (dataUrl) {
+            console.log("[Publish] Screenshot captured, preparing upload...");
+            // Convert dataUrl to Blob
+            const response = await fetch(dataUrl);
+            const blob = await response.blob();
+            console.log(`[Publish] Blob created: ${blob.size} bytes, type: ${blob.type}`);
+
+            try {
+              console.log("[Publish] Attempting S3 upload negotiation...");
+              // 1. Get presigned URL
+              const uploadRes = await apiFetch<any>("/api/v1/uploads", {
+                method: "POST",
+                json: {
+                  type: "post_cover",
+                  contentType: "image/png"
+                }
+              });
+
+              const { putUrl, uploadId } = uploadRes.data.upload;
+              console.log(`[Publish] S3 Presigned URL obtained, id: ${uploadId}`);
+
+              // 2. Upload directly to S3
+              console.log("[Publish] Sending PUT request to S3...");
+              const s3Res = await fetch(putUrl, {
+                method: "PUT",
+                body: blob,
+                headers: {
+                  "Content-Type": "image/png",
+                  "x-amz-acl": "public-read"
+                }
+              });
+
+              if (!s3Res.ok) {
+                throw new Error(`S3 upload failed with status ${s3Res.status}`);
+              }
+
+              coverUploadId = uploadId;
+              console.log("✅ [Publish] Screenshot uploaded to S3 successfully:", coverUploadId);
+            } catch (s3Err) {
+              console.error("⚠️ [Publish] S3 upload failed, trying local fallback:", s3Err);
+
+              // FALLBACK: Upload to local server
+              const formData = new FormData();
+              formData.append('file', blob, 'cover.png');
+              formData.append('type', 'post_cover');
+
+              console.log("[Publish] Attempting local upload fallback...");
+              const localRes = await fetch("/api/v1/uploads/local", {
+                method: "POST",
+                body: formData,
+              });
+
+              if (!localRes.ok) {
+                throw new Error(`Local fallback failed with status ${localRes.status}`);
+              }
+
+              const localData = await localRes.json();
+              coverUploadId = localData.data.upload.uploadId;
+              console.log("✅ [Publish] Screenshot uploaded to LOCAL fallback successfully:", coverUploadId);
+            }
+          } else {
+            console.warn("[Publish] Capture returned empty dataUrl");
+          }
+        } catch (captureErr) {
+          console.error("❌ [Publish] Final screenshot upload failure:", captureErr);
+          // Don't block publishing if only screenshot fails
+        }
+      }
+
       // 1) Create snapshot
       const snapRes = await apiFetch<CreateSnapshotResponse>(
         `/api/v1/projects/${projectId}/snapshots`,
@@ -44,7 +123,7 @@ export function PublishDialog({
           json: {
             jobId: latestJobId,
             config: currentConfig,
-            coverUploadId: null,
+            coverUploadId: coverUploadId,
           },
         }
       );
@@ -77,6 +156,9 @@ export function PublishDialog({
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="text-neutral-900">Publish to community</DialogTitle>
+          <DialogDescription className="text-neutral-500">
+            Share your visualization with the world. Give it a title and description.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">

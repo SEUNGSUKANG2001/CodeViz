@@ -29,6 +29,7 @@ export async function createPresignedPutUrl(
     Bucket: getBucketName(),
     Key: key,
     ContentType: contentType,
+    ACL: 'public-read',
   });
   return getSignedUrl(client, command, { expiresIn });
 }

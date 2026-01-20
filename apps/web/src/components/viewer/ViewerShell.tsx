@@ -17,6 +17,7 @@ export function ViewerShell({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<ThemeType>("Thema1");
   const [saving, setSaving] = useState(false);
+  const [captureFn, setCaptureFn] = useState<(() => Promise<string>) | null>(null);
 
   const fetchProject = useCallback(async () => {
     try {
@@ -148,6 +149,7 @@ export function ViewerShell({ projectId }: { projectId: string }) {
           loading={loading}
           theme={theme}
           onThemeChange={setTheme}
+          onCaptureReady={(fn) => setCaptureFn(() => fn)}
         />
       </div>
 
@@ -159,6 +161,7 @@ export function ViewerShell({ projectId }: { projectId: string }) {
           repoUrl={data.repoUrl}
           currentConfig={{ ...data.currentConfig, theme }}
           latestJobId={data.latestJob?.id ?? null}
+          captureScreenshot={captureFn}
         />
       )}
     </div>
