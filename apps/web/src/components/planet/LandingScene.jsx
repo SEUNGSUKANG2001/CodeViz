@@ -193,47 +193,47 @@ function CameraRig({ mode, targets }) {
 }
 
 function CarouselDragControls({ enabled, dragOffset, setDragOffset }) {
-  const { gl } = useThree();
   const dragRef = useRef({ active: false, startX: 0, startOffset: 0 });
 
   useEffect(() => {
-    if (!gl?.domElement || !enabled) return;
+    if (!enabled) return;
     const onPointerDown = (e) => {
+      const target = e.target;
+      if (target?.closest?.("input, textarea, button, select, a")) return;
       e.preventDefault();
       if (e.button !== 0) return;
       dragRef.current.active = true;
       dragRef.current.startX = e.clientX;
       dragRef.current.startOffset = dragOffset;
-      try {
-        gl.domElement.setPointerCapture(e.pointerId);
-      } catch {
-        // ignore capture failures
-      }
     };
     const onPointerMove = (e) => {
       if (!dragRef.current.active) return;
       const delta = (e.clientX - dragRef.current.startX) / 120;
       setDragOffset(dragRef.current.startOffset + delta);
     };
-    const onPointerUp = (e) => {
+    const onPointerUp = () => {
       dragRef.current.active = false;
-      try {
-        gl.domElement.releasePointerCapture(e.pointerId);
-      } catch {
-        // ignore capture failures
-      }
     };
 
-    gl.domElement.addEventListener("pointerdown", onPointerDown);
-    gl.domElement.addEventListener("pointermove", onPointerMove);
-    gl.domElement.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
     return () => {
-      gl.domElement.removeEventListener("pointerdown", onPointerDown);
-      gl.domElement.removeEventListener("pointermove", onPointerMove);
-      gl.domElement.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [gl, enabled, dragOffset, setDragOffset]);
+  }, [enabled, dragOffset, setDragOffset]);
 
+  return null;
+}
+
+function CarouselLerp({ enabled, targetOffset, setDragOffset }) {
+  useFrame((_, dt) => {
+    if (!enabled) return;
+    const t = 1 - Math.exp(-6 * dt);
+    setDragOffset((prev) => prev + (targetOffset - prev) * t);
+  });
   return null;
 }
 
@@ -276,7 +276,19 @@ export default function LandingScene({
   onSelectPlanet,
 }) {
   const [dragOffset, setDragOffset] = useState(0);
+  const [targetOffset, setTargetOffset] = useState(0);
   const spacing = 12;
+  const listLength = planets.length > 0 ? planets.length : 1;
+  const currentIndex = Math.max(
+    0,
+    (planets.length ? planets.findIndex((p) => p.id === activePlanetId) : 0)
+  );
+
+  useEffect(() => {
+    const next = -currentIndex * spacing;
+    setDragOffset(next);
+    setTargetOffset(next);
+  }, [currentIndex, spacing]);
 
   const fallbackPlanet = useMemo(
     () => ({
@@ -310,6 +322,22 @@ export default function LandingScene({
     [mode, onSelectPlanet]
   );
 
+  useEffect(() => {
+    if (mode !== "carousel") return;
+    const onKey = (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      setTargetOffset((prev) => {
+        const delta = e.key === "ArrowLeft" ? spacing : -spacing;
+        const maxOffset = 0;
+        const minOffset = -(listLength - 1) * spacing;
+        return Math.max(minOffset, Math.min(maxOffset, prev + delta));
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode, listLength, spacing]);
+
   return (
     <div className="h-full w-full bg-[#050814]">
       <Canvas
@@ -332,8 +360,13 @@ export default function LandingScene({
           dragOffset={dragOffset}
           setDragOffset={setDragOffset}
         />
+        <CarouselLerp
+          enabled={mode === "carousel"}
+          targetOffset={targetOffset}
+          setDragOffset={setDragOffset}
+        />
 
-        {mode !== "empty" && (
+        {mode === "main" && (
           <PlanetNode planet={mainPlanet} position={[-2.2, -0.35, 0]} />
         )}
 

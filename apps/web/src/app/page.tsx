@@ -178,7 +178,7 @@ export default function LandingPage() {
 
   return (
     <main className="relative min-h-[200vh] overflow-hidden text-white">
-      <div className="fixed inset-0 -z-10">
+      <div className="fixed inset-0 z-0 pointer-events-auto">
         <LandingScene
           mode={viewMode}
           planets={planets}
