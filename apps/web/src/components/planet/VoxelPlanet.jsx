@@ -198,15 +198,16 @@ function buildGeometry({ density, gridSize, boxSize, isoLevel, radius, colorPara
   const norAttr = geom.getAttribute('normal')
   const colors = new Float32Array(posAttr.count * 3)
 
-  const oceanDeep = new THREE.Color('#173a6b')
-  const oceanShallow = new THREE.Color('#2e67a7')
-  const rock = new THREE.Color('#9b8a6b')
-  const snow = new THREE.Color('#f4f8ff')
-  const white = new THREE.Color('#ffffff')
+  const palette = colorParams.palette || {}
+  const oceanDeep = new THREE.Color(palette.oceanDeep || '#173a6b')
+  const oceanShallow = new THREE.Color(palette.oceanShallow || '#2e67a7')
+  const rock = new THREE.Color(palette.rock || '#9b8a6b')
+  const snow = new THREE.Color(palette.snow || '#f4f8ff')
+  const white = new THREE.Color(palette.foam || '#ffffff')
 
-  const desert = new THREE.Color('#d9c27c')
-  const savanna = new THREE.Color('#b9c35a')
-  const forest2 = new THREE.Color('#3f9e55')
+  const desert = new THREE.Color(palette.landLow || palette.primary || '#d9c27c')
+  const savanna = new THREE.Color(palette.landMid || palette.accent || '#b9c35a')
+  const forest2 = new THREE.Color(palette.landHigh || '#3f9e55')
 
   const v = new THREE.Vector3()
   const normalV = new THREE.Vector3()
@@ -541,7 +542,7 @@ function Water({ radius, seaLevelWorld, sunDir = [0.8, 0.3, 0.45] }) {
 }
 
 // ---------- Clouds (white) ----------
-function Clouds3({ radius, seed, sunDir = [0.8, 0.3, 0.45] }) {
+function Clouds3({ radius, seed, sunDir = [0.8, 0.3, 0.45], cloudColor }) {
   const sun = useMemo(() => new THREE.Vector3(...sunDir).normalize(), [sunDir])
 
   const makeMat = (layerSeed, opacity, f1, f2, threshold, softness, rimK, rimPow) =>
@@ -550,8 +551,8 @@ function Clouds3({ radius, seed, sunDir = [0.8, 0.3, 0.45] }) {
       depthWrite: false,
       side: THREE.FrontSide,
       uniforms: {
-        uColor: { value: new THREE.Color('#ffffff') },
-        uTint: { value: new THREE.Color('#dfe9ff') },
+        uColor: { value: new THREE.Color(cloudColor?.core || '#ffffff') },
+        uTint: { value: new THREE.Color(cloudColor?.tint || '#dfe9ff') },
         uOpacity: { value: 0.5 },
         uSun: { value: sun.clone() },
         uSeed: { value: layerSeed },
@@ -845,6 +846,8 @@ export default function VoxelPlanet({
   seaLevelWorld = 0.02,
   beachBand = 0.03,
   foamBand = 0.012,
+  palette,
+  cloudColor,
 
   sunDir = [0.8, 0.3, 0.45],
 
@@ -866,7 +869,7 @@ export default function VoxelPlanet({
       boxSize,
       isoLevel,
       radius,
-      colorParams: { seaLevelWorld, beachBand, foamBand, sunDir: sun },
+      colorParams: { seaLevelWorld, beachBand, foamBand, sunDir: sun, palette },
     })
   }, [density, gridSize, boxSize, isoLevel, radius, seaLevelWorld, beachBand, foamBand, sun])
 
@@ -912,7 +915,7 @@ export default function VoxelPlanet({
   return (
     <group ref={root}>
 
-      <Water radius={radius} seaLevelWorld={seaLevelWorld} sunDir={sunDir} />
+      {seaLevelWorld <= 0.1 && <Water radius={radius} seaLevelWorld={seaLevelWorld} sunDir={sunDir} />}
 
       {/* land */}
       <mesh geometry={geometry} material={landMat} castShadow receiveShadow />
@@ -926,7 +929,7 @@ export default function VoxelPlanet({
       {/* clouds + (2) shadows (same rotation group so they move together) */}
       <group ref={cloudGroup}>
         <CloudShadow radius={radius} seed={seed} sunDir={sunDir} />
-        <Clouds3 radius={radius} seed={seed} sunDir={sunDir} />
+        <Clouds3 radius={radius} seed={seed} sunDir={sunDir} cloudColor={cloudColor} />
       </group>
     </group>
   )

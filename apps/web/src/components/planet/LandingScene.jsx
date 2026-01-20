@@ -268,6 +268,8 @@ function resolvePlanetParams(planet) {
 
 function PlanetNode({ planet, position, onPick }) {
   const params = resolvePlanetParams(planet);
+  const palette = planet?.palette || {};
+  const cloudColor = planet?.cloudColor || {};
   return (
     <group position={position}>
       <VoxelPlanet
@@ -279,6 +281,8 @@ function PlanetNode({ planet, position, onPick }) {
         seaLevelWorld={params.seaLevelWorld}
         beachBand={params.beachBand}
         foamBand={params.foamBand}
+        palette={palette}
+        cloudColor={cloudColor}
         sunDir={[-30, 22, -18]}
         rotatePeriodSec={80}
         cloudSpeedFactor={0.4}
