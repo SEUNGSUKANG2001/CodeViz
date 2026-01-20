@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import VoxelPlanet from "./VoxelPlanet.jsx";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 
 const PLANET_RADIUS = 2.35;
 
@@ -31,9 +33,9 @@ function makeRadialTexture(stops, size = 256) {
   return t;
 }
 
-function Sun({ sunPos = [-30, 22, -18], distance = 90, size = 14, haloSize = 34, intensity = 2.6 }) {
-  const sunDir = useMemo(() => new THREE.Vector3(...sunPos).normalize(), [sunPos]);
-  const spritePos = useMemo(() => sunDir.clone().multiplyScalar(distance).toArray(), [sunDir, distance]);
+function Sun({ sunPosRef, sunPos = [-30, 22, -18], distance = 90, size = 14, haloSize = 34, intensity = 3.6 }) {
+  const lightRef = useRef();
+  const spriteRef = useRef();
 
   const coreTex = useMemo(
     () =>
@@ -57,16 +59,24 @@ function Sun({ sunPos = [-30, 22, -18], distance = 90, size = 14, haloSize = 34,
     []
   );
 
+  useFrame(() => {
+    const pos = sunPosRef?.current ? new THREE.Vector3(...sunPosRef.current) : new THREE.Vector3(...sunPos);
+    if (lightRef.current) lightRef.current.position.copy(pos);
+    const spritePos = pos.clone().normalize().multiplyScalar(distance);
+    if (spriteRef.current) spriteRef.current.position.copy(spritePos);
+  });
+
   return (
     <>
       <directionalLight
         position={sunPos}
+        ref={lightRef}
         intensity={intensity}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
       />
-      <group position={spritePos}>
+      <group ref={spriteRef}>
         <sprite scale={[haloSize, haloSize, 1]}>
           <spriteMaterial
             map={haloTex}
@@ -178,7 +188,7 @@ function CameraRig({ mode, targets }) {
   const targetRef = useRef(new THREE.Vector3(...targets.main.target));
   const desiredPos = useRef(new THREE.Vector3());
   const desiredTarget = useRef(new THREE.Vector3());
-  const dampingRef = useRef(2.0);
+  const dampingRef = useRef(6.0);
   const modeRef = useRef(mode);
   const prevModeRef = useRef(mode);
   const transitionRef = useRef({
@@ -197,7 +207,7 @@ function CameraRig({ mode, targets }) {
     desiredTarget.current.set(...conf.target);
 
     if (modeRef.current !== mode) {
-      prevModeRef.current = mode;
+      prevModeRef.current = modeRef.current;
       modeRef.current = mode;
       transitionRef.current.active = mode === "carousel";
       transitionRef.current.t = 0;
@@ -222,7 +232,7 @@ function CameraRig({ mode, targets }) {
     }
 
     if (transitionRef.current.active) {
-      const speed = 0.8;
+      const speed = 0.96;
       transitionRef.current.t = Math.min(1, transitionRef.current.t + dt * speed);
       const t = transitionRef.current.t;
       camera.position.lerpVectors(
@@ -237,13 +247,27 @@ function CameraRig({ mode, targets }) {
       );
       if (t >= 1) transitionRef.current.active = false;
     } else {
-      expDamp(camera.position, desiredPos.current, dampingRef.current, dt);
-      expDamp(targetRef.current, desiredTarget.current, dampingRef.current, dt);
+      const base = dampingRef.current;
+      const damp = mode === "main" && prevModeRef.current === "carousel" ? base * 0.8 : base;
+      expDamp(camera.position, desiredPos.current, damp, dt);
+      expDamp(targetRef.current, desiredTarget.current, damp, dt);
     }
 
     camera.lookAt(targetRef.current);
   });
 
+  return null;
+}
+
+function SunRig({ mode, base, sunPosRef, angleRef }) {
+  useFrame((_, dt) => {
+    const targetAngle = mode === "carousel" ? Math.PI * 0.25 : 0;
+    const t = 1 - Math.exp(-1 * dt);
+    angleRef.current += (targetAngle - angleRef.current) * t;
+    const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angleRef.current);
+    const pos = base.clone().applyQuaternion(rot).toArray();
+    sunPosRef.current = pos;
+  });
   return null;
 }
 
@@ -274,6 +298,12 @@ function PlanetNode({
   placement,
   focusId,
   enableRotateDrag,
+  shipLandingActive,
+  onShipArrive,
+  shipTestMode,
+  shipLandingKey,
+  registerActiveRef,
+  cityBuilt,
 }) {
   const params = resolvePlanetParams(planet);
   const palette = planet?.palette || {};
@@ -282,6 +312,11 @@ function PlanetNode({
   const targetQuat = useRef(new THREE.Quaternion());
   const hasTarget = useRef(false);
   const dragRef = useRef({ active: false, lastX: 0, lastY: 0 });
+  useEffect(() => {
+    if (!registerActiveRef) return;
+    if (focusId && planet?.id !== focusId) return;
+    registerActiveRef(groupRef.current);
+  }, [focusId, planet, registerActiveRef]);
 
   useEffect(() => {
     if (!placementMode || !placement?.point) {
@@ -293,8 +328,8 @@ function PlanetNode({
       return;
     }
     const point = new THREE.Vector3(...placement.point);
-    const localDir = point.clone().sub(new THREE.Vector3(...position)).normalize();
-    const targetDir = new THREE.Vector3(0, 0, 1);
+    const localDir = point.clone().normalize();
+    const targetDir = new THREE.Vector3(0, 0.28, 1).normalize();
     targetQuat.current.setFromUnitVectors(localDir, targetDir);
     hasTarget.current = true;
   }, [placementMode, placement, focusId, planet, position]);
@@ -353,8 +388,24 @@ function PlanetNode({
         sunDir={[-30, 22, -18]}
         rotatePeriodSec={placementMode ? 0 : 80}
         cloudSpeedFactor={0.4}
-        onPick={onPick}
+        onPick={(point, normal) => {
+          if (!onPick) return;
+          if (!groupRef.current) {
+            onPick(point, normal);
+            return;
+          }
+          const localPoint = groupRef.current.worldToLocal(point.clone());
+          const inv = groupRef.current.quaternion.clone().invert();
+          const localNormal = normal.clone().applyQuaternion(inv).normalize();
+          onPick(localPoint, localNormal);
+        }}
       />
+      {placementMode && placement && focusId === planet?.id && (
+        <PlacementMarker placement={placement} />
+      )}
+      {cityBuilt && placement && focusId === planet?.id && (
+        <CityMarker placement={placement} />
+      )}
     </group>
   );
 }
@@ -416,6 +467,225 @@ function PlacementMarker({ placement }) {
   );
 }
 
+function CityMarker({ placement }) {
+  const normal = useMemo(() => {
+    if (!placement?.normal) return null;
+    return new THREE.Vector3(...placement.normal).normalize();
+  }, [placement]);
+  const position = placement?.point ?? null;
+  const rotation = useMemo(() => {
+    if (!normal) return null;
+    const up = new THREE.Vector3(0, 1, 0);
+    const q = new THREE.Quaternion().setFromUnitVectors(up, normal);
+    return q;
+  }, [normal]);
+
+  if (!position || !rotation) return null;
+
+  return (
+    <group position={position} quaternion={rotation}>
+      <mesh position={[0, 0.1, 0]}>
+        <boxGeometry args={[0.22, 0.18, 0.22]} />
+        <meshStandardMaterial color="#d9f1ff" emissive="#64d9ff" emissiveIntensity={0.35} />
+      </mesh>
+      <mesh position={[0.18, 0.06, -0.1]}>
+        <boxGeometry args={[0.14, 0.12, 0.14]} />
+        <meshStandardMaterial color="#b7ddff" emissive="#48c3ff" emissiveIntensity={0.3} />
+      </mesh>
+      <mesh position={[-0.18, 0.07, 0.12]}>
+        <boxGeometry args={[0.16, 0.14, 0.16]} />
+        <meshStandardMaterial color="#c9e8ff" emissive="#59ceff" emissiveIntensity={0.32} />
+      </mesh>
+      <mesh position={[0, 0.24, 0]}>
+        <boxGeometry args={[0.08, 0.14, 0.08]} />
+        <meshStandardMaterial color="#ecf8ff" emissive="#7fe6ff" emissiveIntensity={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+const TRAIN_PARTS = [
+  { key: "a", obj: "/train/train-electric-city-a.obj", mtl: "/train/train-electric-city-a.mtl" },
+  { key: "b", obj: "/train/train-electric-city-b.obj", mtl: "/train/train-electric-city-b.mtl" },
+  { key: "c", obj: "/train/train-electric-city-c.obj", mtl: "/train/train-electric-city-c.mtl" },
+];
+const TRAIN_CACHE = new Map();
+
+function loadTrainPart(part, objLoader, mtlLoader) {
+  if (TRAIN_CACHE.has(part.obj)) {
+    return Promise.resolve(TRAIN_CACHE.get(part.obj).clone());
+  }
+  return new Promise((resolve, reject) => {
+    const baseUrl = part.obj.substring(0, part.obj.lastIndexOf("/") + 1);
+    const objFile = part.obj.split("/").pop();
+    const mtlFile = part.mtl.split("/").pop();
+    mtlLoader.setPath(baseUrl).load(
+      mtlFile,
+      (mtl) => {
+        mtl.preload();
+        objLoader.setMaterials(mtl);
+        objLoader.setPath(baseUrl).load(
+          objFile,
+          (obj) => {
+            TRAIN_CACHE.set(part.obj, obj);
+            resolve(obj.clone());
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      () => {
+        objLoader.setMaterials(null);
+        objLoader.setPath(baseUrl).load(
+          objFile,
+          (obj) => {
+            obj.traverse((c) => {
+              if (c.isMesh) {
+                c.material = new THREE.MeshStandardMaterial({ color: "#cfe3ff" });
+              }
+            });
+            TRAIN_CACHE.set(part.obj, obj);
+            resolve(obj.clone());
+          },
+          undefined,
+          reject
+        );
+      }
+    );
+  });
+}
+
+function TrainLanding({ active, placement, onArrive, loop = false, landingKey }) {
+  const { camera } = useThree();
+  const [ship, setShip] = useState(null);
+  const pathRef = useRef({
+    start: new THREE.Vector3(),
+    control: new THREE.Vector3(),
+    end: new THREE.Vector3(),
+  });
+  const tRef = useRef(0);
+  const doneRef = useRef(false);
+  const effectRef = useRef(null);
+
+  useEffect(() => {
+    const objLoader = new OBJLoader();
+    const mtlLoader = new MTLLoader();
+    let mounted = true;
+    Promise.all(TRAIN_PARTS.map((part) => loadTrainPart(part, objLoader, mtlLoader)))
+      .then((parts) => {
+        if (!mounted) return;
+        const group = new THREE.Group();
+        const sizes = parts.map((p) => new THREE.Box3().setFromObject(p).getSize(new THREE.Vector3()));
+        const front = parts[0];
+        const mid = parts[1];
+        const tail = parts[2];
+        mid.position.z = -sizes[0].z * 0.85;
+        tail.position.z = -(sizes[0].z * 0.85 + sizes[1].z * 0.9);
+        group.add(front, mid, tail);
+        const box = new THREE.Box3().setFromObject(group);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        group.position.sub(center);
+        group.scale.setScalar(0.09);
+        setShip(group);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!active || !placement?.point || !ship) return;
+    tRef.current = 0;
+    doneRef.current = false;
+    camera.updateMatrixWorld();
+    const normal = new THREE.Vector3(...placement.normal).normalize();
+    const endWorld = new THREE.Vector3(...placement.point).add(normal.clone().multiplyScalar(0.35));
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    const cameraWorld = new THREE.Vector3();
+    camera.getWorldPosition(cameraWorld);
+    const startWorld = cameraWorld
+      .clone()
+      .add(forward.clone().multiplyScalar(-3.2))
+      .add(new THREE.Vector3(0, 0.05, 0));
+    const flyBy = cameraWorld
+      .clone()
+      .add(forward.clone().multiplyScalar(4.5))
+      .add(new THREE.Vector3(0, 0.08, 0));
+    const controlWorld = flyBy
+      .clone()
+      .lerp(endWorld, 0.6)
+      .add(normal.clone().multiplyScalar(2.6));
+    pathRef.current.start.copy(startWorld);
+    pathRef.current.control.copy(controlWorld);
+    pathRef.current.end.copy(endWorld);
+  }, [active, placement, ship, camera, landingKey]);
+
+  useFrame((_, dt) => {
+    if (!active || !ship) return;
+    tRef.current = Math.min(1, tRef.current + dt * 0.145);
+    const t = tRef.current;
+    const inv = 1 - t;
+    const { start, control, end } = pathRef.current;
+    const pos = new THREE.Vector3(
+      inv * inv * start.x + 2 * inv * t * control.x + t * t * end.x,
+      inv * inv * start.y + 2 * inv * t * control.y + t * t * end.y,
+      inv * inv * start.z + 2 * inv * t * control.z + t * t * end.z
+    );
+    ship.position.copy(pos);
+    const nextT = Math.min(1, t + 0.02);
+    const invN = 1 - nextT;
+    const next = new THREE.Vector3(
+      invN * invN * start.x + 2 * invN * nextT * control.x + nextT * nextT * end.x,
+      invN * invN * start.y + 2 * invN * nextT * control.y + nextT * nextT * end.y,
+      invN * invN * start.z + 2 * invN * nextT * control.z + nextT * nextT * end.z
+    );
+    ship.lookAt(next);
+    if (placement?.normal) {
+      const normal = new THREE.Vector3(...placement.normal).normalize();
+      const blend = THREE.MathUtils.smoothstep(t, 0.6, 0.98);
+      const tangent = next.clone().sub(pos).projectOnPlane(normal);
+      if (tangent.lengthSq() < 1e-6) {
+        tangent.copy(camera.up).projectOnPlane(normal);
+      }
+      const approachDir = next.clone().sub(pos).normalize();
+      const finalDir = tangent.normalize();
+      const dir = approachDir.lerp(finalDir, blend).normalize();
+      ship.up.copy(camera.up.clone().lerp(normal, blend).normalize());
+    ship.lookAt(pos.clone().add(dir.multiplyScalar(-1)));
+    }
+    if (effectRef.current) {
+      const s = Math.max(0, (t - 0.75) / 0.25);
+      effectRef.current.scale.setScalar(0.6 + s * 2.2);
+      effectRef.current.material.opacity = 0.5 * (1 - s);
+    }
+    if (t >= 1 && !doneRef.current) {
+      doneRef.current = true;
+      if (loop) {
+        tRef.current = 0;
+        doneRef.current = false;
+      } else {
+        onArrive?.();
+      }
+    }
+  });
+
+  if (!ship) return null;
+
+  return (
+    <>
+      <primitive object={ship} />
+      <mesh ref={effectRef} position={placement?.point ?? [0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.25, 0.6, 40]} />
+        <meshBasicMaterial color="#6fe7ff" transparent opacity={0.0} />
+      </mesh>
+    </>
+  );
+}
+
 export default function LandingScene({
   mode = "empty",
   planets = [],
@@ -426,9 +696,18 @@ export default function LandingScene({
   placementMode = false,
   placement = null,
   focusId = null,
+  shipLandingActive = false,
+  onShipArrive,
+  shipTestMode = false,
+  shipLandingKey = 0,
+  cityBuilt = false,
 }) {
   const [dragOffset, setDragOffset] = useState(0);
   const [targetOffset, setTargetOffset] = useState(0);
+  const dragOffsetRef = useRef(0);
+  const targetOffsetRef = useRef(0);
+  const lastArrowRef = useRef(0);
+  const focusTimerRef = useRef(null);
   const spacing = 12;
   const listLength = planets.length > 0 ? planets.length : 1;
   const currentIndex = Math.max(
@@ -438,9 +717,19 @@ export default function LandingScene({
 
   useEffect(() => {
     const next = -currentIndex * spacing;
-    setDragOffset(next);
     setTargetOffset(next);
-  }, [currentIndex, spacing]);
+    if (mode !== "carousel") {
+      setDragOffset(next);
+    }
+  }, [currentIndex, spacing, mode]);
+
+  useEffect(() => {
+    dragOffsetRef.current = dragOffset;
+  }, [dragOffset]);
+
+  useEffect(() => {
+    targetOffsetRef.current = targetOffset;
+  }, [targetOffset]);
 
   const fallbackPlanet = useMemo(
     () => ({
@@ -455,6 +744,10 @@ export default function LandingScene({
 
   const list = planets.length > 0 ? planets : [fallbackPlanet];
   const mainPlanet = list.find((p) => p.id === activePlanetId) || list[0];
+  const visibleIndex = Math.max(0, Math.min(list.length - 1, Math.round(-dragOffset / spacing)));
+  const activePlanetRef = useRef(null);
+  const [placementWorld, setPlacementWorld] = useState(null);
+  const landingLockRef = useRef({ key: 0, locked: null });
 
   const targets = useMemo(
     () => ({
@@ -464,6 +757,9 @@ export default function LandingScene({
     }),
     []
   );
+  const baseSunRef = useRef(new THREE.Vector3(-30, 22, -18));
+  const sunPos = useRef(baseSunRef.current.clone().toArray());
+  const sunAngleRef = useRef(0);
 
   const handlePick = useCallback(
     (planet, point, normal) => {
@@ -482,27 +778,57 @@ export default function LandingScene({
     if (mode !== "carousel") return;
     const onKey = (e) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (placementMode) return;
+      if (shipLandingActive) return;
       e.preventDefault();
+      const now = Date.now();
+      if (now - lastArrowRef.current < 600) return;
+      lastArrowRef.current = now;
       setTargetOffset((prev) => {
         const delta = e.key === "ArrowLeft" ? spacing : -spacing;
         const maxOffset = 0;
         const minOffset = -(listLength - 1) * spacing;
-        return Math.max(minOffset, Math.min(maxOffset, prev + delta));
+        const next = Math.max(minOffset, Math.min(maxOffset, prev + delta));
+        const nextIndex = Math.max(0, Math.min(listLength - 1, Math.round(-next / spacing)));
+        if (focusTimerRef.current) {
+          window.clearTimeout(focusTimerRef.current);
+        }
+        if (onFocusPlanetChange && list[nextIndex]) {
+          focusTimerRef.current = window.setTimeout(() => {
+            onFocusPlanetChange(list[nextIndex]);
+          }, 200);
+        }
+        return next;
       });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, listLength, spacing]);
+  }, [mode, listLength, spacing, placementMode, shipLandingActive]);
 
   useEffect(() => {
-    if (mode !== "carousel") return;
-    if (!list.length) return;
-    const idx = Math.max(0, Math.min(list.length - 1, Math.round(-targetOffset / spacing)));
-    const focused = list[idx];
-    if (focused && onFocusPlanetChange) {
-      onFocusPlanetChange(focused);
-    }
-  }, [mode, targetOffset, spacing, list, onFocusPlanetChange]);
+    return () => {
+      if (focusTimerRef.current) {
+        window.clearTimeout(focusTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!shipLandingActive || !placement?.point || !activePlanetRef.current) return;
+    if (landingLockRef.current.key === shipLandingKey && landingLockRef.current.locked) return;
+    const worldPoint = activePlanetRef.current
+      .localToWorld(new THREE.Vector3(...placement.point))
+      .add(new THREE.Vector3(0.4, 0.3, 0));
+    const worldNormal = new THREE.Vector3(...placement.normal)
+      .applyQuaternion(activePlanetRef.current.quaternion)
+      .normalize();
+    const locked = {
+      point: [worldPoint.x, worldPoint.y, worldPoint.z],
+      normal: [worldNormal.x, worldNormal.y, worldNormal.z],
+    };
+    landingLockRef.current = { key: shipLandingKey, locked };
+    setPlacementWorld(locked);
+  }, [shipLandingActive, placement, shipLandingKey]);
 
   return (
     <div className="h-full w-full bg-[#050814]">
@@ -517,8 +843,9 @@ export default function LandingScene({
       >
         <NebulaBackdrop radius={95} sunDir={[0.8, 0.3, 0.45]} />
         <Stars />
-        <Sun sunPos={[-30, 22, -18]} />
-        <ambientLight intensity={0.08} />
+        <Sun sunPosRef={sunPos} />
+        <SunRig mode={mode} base={baseSunRef.current} sunPosRef={sunPos} angleRef={sunAngleRef} />
+        <ambientLight intensity={0.18} />
 
         <CameraRig mode={mode} targets={targets} />
         <CarouselLerp
@@ -533,22 +860,41 @@ export default function LandingScene({
 
         {mode === "carousel" && (
           <group position={[dragOffset, -0.4, 0]}>
-            {list.map((planet, idx) => (
-              <PlanetNode
-                key={planet.id || idx}
-                planet={planet}
-                position={[idx * spacing, 0, 0]}
-                onPick={(point, normal) => handlePick(planet, point, normal)}
-                placementMode={placementMode}
-                placement={placement}
-                focusId={focusId}
-                enableRotateDrag={placementMode && focusId === planet.id}
-              />
-            ))}
+            {list.map((planet, idx) => {
+              if ((placementMode || shipLandingActive) && planet?.id !== focusId) return null;
+              if (!placementMode && !shipLandingActive && idx !== visibleIndex) return null;
+              return (
+                <PlanetNode
+                  key={planet.id || idx}
+                  planet={planet}
+                  position={[idx * spacing, 0, 0]}
+                  onPick={(point, normal) => handlePick(planet, point, normal)}
+                  placementMode={placementMode}
+                  placement={placement}
+                  focusId={focusId}
+                  enableRotateDrag={placementMode && focusId === planet.id && !shipLandingActive}
+                  shipLandingActive={shipLandingActive}
+                  onShipArrive={onShipArrive}
+                  shipTestMode={shipTestMode}
+                  shipLandingKey={shipLandingKey}
+                  registerActiveRef={(ref) => {
+                    if (ref) activePlanetRef.current = ref;
+                  }}
+                  cityBuilt={cityBuilt}
+                />
+              );
+            })}
           </group>
         )}
-
-        {mode === "carousel" && placementMode && <PlacementMarker placement={placement} />}
+        {mode === "carousel" && shipLandingActive && placementWorld && (
+          <TrainLanding
+            active={shipLandingActive}
+            placement={placementWorld}
+            onArrive={shipTestMode ? undefined : onShipArrive}
+            loop={shipTestMode}
+            landingKey={shipLandingKey}
+          />
+        )}
       </Canvas>
     </div>
   );

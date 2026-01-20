@@ -414,6 +414,10 @@ export default function LandingPage() {
     point: [number, number, number];
     normal: [number, number, number];
   } | null>(null);
+  const [shipLandingActive, setShipLandingActive] = useState(false);
+  const [shipTestMode, setShipTestMode] = useState(false);
+  const [shipLandingKey, setShipLandingKey] = useState(0);
+  const [cityBuilt, setCityBuilt] = useState(false);
   const isCustomizing = pendingProjectId !== null && customPlanets.length > 0;
   const [repos, setRepos] = useState<any[]>([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
@@ -547,6 +551,7 @@ export default function LandingPage() {
       setViewMode("carousel");
       setPlacementMode(false);
       setPlacement(null);
+      setCityBuilt(false);
     } catch {
       alert("Failed to create project");
     } finally {
@@ -590,13 +595,8 @@ export default function LandingPage() {
 
   const story = focusedPlanet ? buildPlanetLore(focusedPlanet) : null;
 
-  const handleTerraform = async () => {
-    if (!focusedPlanet || !pendingProjectId) return;
-    if (!placementMode) {
-      setPlacementMode(true);
-      return;
-    }
-    if (!placement) return;
+  const completeTerraform = useCallback(async () => {
+    if (!focusedPlanet || !pendingProjectId || !placement) return;
     setTerraforming(true);
     try {
       const res = await fetch("/api/v1/planets", {
@@ -618,16 +618,36 @@ export default function LandingPage() {
         alert(data.error?.message || "Failed to terraform planet");
         return;
       }
-      setCustomPlanets([]);
-      setPendingProjectId(null);
-      setPlacementMode(false);
-      setPlacement(null);
-      router.push(`/p/${pendingProjectId}`);
+      setCityBuilt(true);
+      setShipTestMode(false);
     } catch {
       alert("Failed to terraform planet");
     } finally {
       setTerraforming(false);
     }
+  }, [focusedPlanet, pendingProjectId, placement, router]);
+
+  const handleTerraform = () => {
+    if (!focusedPlanet || !pendingProjectId) return;
+    if (!placementMode) {
+      setPlacementMode(true);
+      return;
+    }
+    if (!placement) return;
+    if (shipLandingActive || terraforming) return;
+    setShipLandingActive(true);
+    setShipLandingKey((prev) => prev + 1);
+  };
+
+  const handleTestLanding = () => {
+    if (!placementMode) {
+      setPlacementMode(true);
+      return;
+    }
+    if (!placement) return;
+    setShipTestMode(true);
+    setShipLandingActive(true);
+    setShipLandingKey((prev) => prev + 1);
   };
 
   const handleExitCustomizing = () => {
@@ -635,6 +655,9 @@ export default function LandingPage() {
     setPendingProjectId(null);
     setPlacementMode(false);
     setPlacement(null);
+    setShipLandingActive(false);
+    setShipTestMode(false);
+    setCityBuilt(false);
     setViewMode("main");
   };
 
@@ -661,6 +684,11 @@ export default function LandingPage() {
           placementMode={placementMode}
           placement={placement}
           focusId={focusedPlanet?.id ?? null}
+          shipLandingActive={shipLandingActive}
+          onShipArrive={completeTerraform}
+          shipTestMode={shipTestMode}
+          shipLandingKey={shipLandingKey}
+          cityBuilt={cityBuilt}
         />
       </div>
 
@@ -868,19 +896,29 @@ export default function LandingPage() {
             <button
               type="button"
               onClick={handleTerraform}
-              disabled={terraforming || !pendingProjectId || (placementMode && !placement)}
+              disabled={terraforming || shipLandingActive || !pendingProjectId || (placementMode && !placement)}
               className={cn(
                 "w-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] transition",
-                terraforming
+                terraforming || shipLandingActive
                   ? "bg-white/10 text-white/50"
                   : "bg-cyan-300/90 text-black hover:bg-cyan-200"
               )}
             >
               {terraforming
                 ? "Terraforming..."
-                : placementMode
-                  ? "Confirm Landing Site"
-                  : "Terraforming"}
+                : shipLandingActive
+                  ? "Landing..."
+                  : placementMode
+                    ? "Confirm Landing Site"
+                    : "Terraforming"}
+            </button>
+            <button
+              type="button"
+              onClick={handleTestLanding}
+              disabled={!pendingProjectId || (placementMode && !placement)}
+              className="w-full border border-white/20 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
+            >
+              Test Landing
             </button>
             <button
               type="button"
