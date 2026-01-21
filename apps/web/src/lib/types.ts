@@ -122,6 +122,7 @@ export type PostDetail = {
   createdAt: string;
   updatedAt: string;
   author: Author;
+  planet?: PlanetSummary | null;
   snapshot: {
     id: string;
     coverUrl: string | null;

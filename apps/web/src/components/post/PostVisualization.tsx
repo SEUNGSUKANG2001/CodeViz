@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import type { GraphData, ResultUrlResponse } from "@/lib/types";
+import type { GraphData, ResultUrlResponse, PlanetSummary } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
 import type { ThemeType } from "@/components/viewer/useCodeCityViewer";
 import { cn } from "@/lib/utils";
 import type { CommitInfo, Snapshot } from "@/lib/types";
+import { ControlsPanel } from "@/components/viewer/ControlsPanel";
+import Link from "next/link";
 
 const LandingScene = dynamic<any>(() => import("@/components/planet/LandingScene"), { ssr: false });
 
@@ -21,6 +23,7 @@ type Props = {
   projectId?: string | null;
   history?: CommitInfo[];
   snapshots?: Snapshot[];
+  planet?: PlanetSummary | null;
 };
 
 const THEMES: { id: ThemeType; label: string; icon: string }[] = [
@@ -88,7 +91,8 @@ export function PostVisualization({
   immersive = false,
   onClose,
   history = [],
-  snapshots = []
+  snapshots = [],
+  planet = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [graphData, setGraphData] = useState<GraphData | null>(null);
@@ -99,6 +103,69 @@ export function PostVisualization({
 
   const [currentTheme, setCurrentTheme] = useState<ThemeType>(initialTheme);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [uiHidden, setUiHidden] = useState(false);
+  const [selectedCityNode, setSelectedCityNode] = useState<{
+    id: string;
+    lineCount: number;
+    imports: string[];
+    usedBy: string[];
+  } | null>(null);
+  const [cityFocusTarget, setCityFocusTarget] = useState<{
+    point: [number, number, number];
+    normal: [number, number, number];
+  } | null>(null);
+
+  const placement = useMemo(() => {
+    const anchor = (planet?.params as any)?.cityAnchor;
+    if (anchor?.point && anchor?.normal) {
+      return {
+        point: anchor.point as [number, number, number],
+        normal: anchor.normal as [number, number, number],
+      };
+    }
+    if (planet) {
+      return {
+        point: [0, 1, 0],
+        normal: [0, 1, 0],
+      };
+    }
+    return null;
+  }, [planet]);
+
+  const planets = useMemo(() => {
+    if (!planet) return [];
+    return [planet];
+  }, [planet]);
+
+  const handleCityNodeSelect = useMemo(() => {
+    return (
+      nodeId: string,
+      position: { x: number; y: number; z: number },
+      normal: { x: number; y: number; z: number }
+    ) => {
+      if (!activeGraphData) return;
+      const node = activeGraphData.nodes.find((n: any) => n.id === nodeId);
+      const edges = activeGraphData.edges || (activeGraphData as any).links || [];
+      const imports: string[] = [];
+      const usedBy: string[] = [];
+      edges.forEach((edge: any) => {
+        const sId = typeof edge.source === "object" ? edge.source.id : edge.source;
+        const tId = typeof edge.target === "object" ? edge.target.id : edge.target;
+        if (sId === nodeId) imports.push(tId);
+        if (tId === nodeId) usedBy.push(sId);
+      });
+      setSelectedCityNode({
+        id: nodeId,
+        lineCount: (node as any)?.lines ?? (node as any)?.lineCount ?? (node as any)?.loc ?? 0,
+        imports,
+        usedBy,
+      });
+      setCityFocusTarget({
+        point: [position.x, position.y, position.z],
+        normal: [normal.x, normal.y, normal.z],
+      });
+    };
+  }, [activeGraphData]);
 
   useEffect(() => {
     if (!graphData) {
@@ -195,20 +262,6 @@ export function PostVisualization({
     );
   }
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const preventScroll = (event: Event) => {
-      event.preventDefault();
-    };
-    el.addEventListener("wheel", preventScroll, { passive: false });
-    el.addEventListener("touchmove", preventScroll, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", preventScroll);
-      el.removeEventListener("touchmove", preventScroll);
-    };
-  }, []);
-
   return (
     <>
       <div
@@ -219,14 +272,22 @@ export function PostVisualization({
           ? "fixed inset-0 z-50 rounded-none bg-black"
           : "aspect-[16/9] rounded-3xl border border-white/10 bg-black shadow-2xl"
       )}
+        onWheelCapture={(e) => {
+          e.preventDefault();
+        }}
+        onTouchMoveCapture={(e) => {
+          e.preventDefault();
+        }}
       >
         <div className="absolute inset-0">
           {activeGraphData && (
             <LandingScene
               mode="main"
-              planets={[]}
-              activePlanetId={null}
+              planets={planets}
+              activePlanetId={planet?.id ?? null}
               placementMode={false}
+              placement={placement}
+              focusId={planet?.id ?? null}
               shipLandingActive={false}
               shipTestMode={false}
               shipLandingKey={0}
@@ -234,6 +295,9 @@ export function PostVisualization({
               cityGraphData={activeGraphData}
               cityTheme={currentTheme}
               enableOrbit={true}
+              selectedNodeId={selectedCityNode?.id ?? null}
+              onCityNodeSelect={handleCityNodeSelect}
+              cityFocusTarget={cityFocusTarget}
             />
           )}
         </div>
@@ -249,77 +313,131 @@ export function PostVisualization({
           </div>
         )}
 
-        {/* Top Control Bar (Themes) - Immersive only */}
         {immersive && (
-          <div className="absolute left-0 right-0 top-0 z-40 p-6 animate-in slide-in-from-top duration-500">
-            <div className="mx-auto flex max-w-fit items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-2 backdrop-blur-xl">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setCurrentTheme(t.id)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all",
-                    currentTheme === t.id
-                      ? "bg-white text-black scale-105"
-                      : "text-white/60 hover:bg-white/5 hover:text-white"
+          <>
+            <div className="pointer-events-auto absolute inset-x-0 top-0 z-40 border-b border-white/10 bg-black/50 px-6 py-4 backdrop-blur-md">
+              <div className="mx-auto flex max-w-[1600px] items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Link href="/" className="flex items-center gap-3">
+                    <div className="relative h-8 w-8 rounded-none border border-white/20 bg-white/10">
+                      <div className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan-300" />
+                    </div>
+                    <span className="text-sm font-semibold tracking-[0.18em] text-white">CODEVIZ</span>
+                  </Link>
+                  <span className="text-white/20">/</span>
+                  <div className="text-sm font-medium text-white/90">{title}</div>
+                  {jobStatus && (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/70">
+                      Job: {jobStatus}
+                    </span>
                   )}
-                >
-                  <span>{t.icon}</span>
-                  <span>{t.label}</span>
-                </button>
-              ))}
-              <div className="mx-2 h-4 w-px bg-white/10" />
-              <button
-                onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all"
+                </div>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/feed"
+                    className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs text-white/80"
+                  >
+                    Explore
+                  </Link>
+                  <button
+                    onClick={() => setUiHidden((prev) => !prev)}
+                    className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs text-white/80"
+                  >
+                    {uiHidden ? "Show UI" : "Hide UI"}
+                  </button>
+                  {onClose && (
+                    <button
+                      onClick={onClose}
+                      className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs text-white/80"
+                    >
+                      Close
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/40 px-6 py-3 backdrop-blur-md">
+              <div className="mx-auto flex max-w-[1600px] items-center justify-between text-xs text-white/70">
+                <span>3D City View · Drag to orbit · Scroll to zoom</span>
+                <span>Theme: {currentTheme}</span>
+              </div>
+            </div>
+
+            <div
+              className="pointer-events-auto absolute right-0 top-[68px] z-40 h-[calc(100vh-68px)] w-[360px] transition-transform duration-[1200ms] ease-in-out"
+              style={{
+                transform: uiHidden ? "translateX(110%)" : "translateX(0)",
+                pointerEvents: uiHidden ? "none" : "auto",
+              }}
+            >
+              <ControlsPanel
+                project={null}
+                theme={currentTheme}
+                onThemeChange={setCurrentTheme}
+                selectedNode={selectedCityNode}
+              />
+            </div>
+
+            {activeGraphData?.history && activeGraphData.history.length > 0 && (
+              <div
+                className="pointer-events-auto absolute bottom-24 left-1/2 z-40 w-[520px] -translate-x-1/2 border border-white/10 bg-black/40 px-4 py-3 backdrop-blur-md transition-transform duration-[1200ms] ease-in-out"
+                style={{
+                  transform: `translate(-50%, ${uiHidden ? "160%" : "0"})`,
+                  opacity: uiHidden ? 0 : 1,
+                  pointerEvents: uiHidden ? "none" : "auto",
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onPointerMove={(e) => e.stopPropagation()}
+                onWheel={(e) => e.stopPropagation()}
               >
-                &times;
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Bottom Control Bar (Timeline) - Immersive only */}
-        {immersive && viewerReady && graphData?.history && graphData.history.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 z-40 p-8 animate-in slide-in-from-bottom duration-500">
-            <div className="mx-auto max-w-3xl space-y-4 rounded-3xl border border-white/10 bg-black/40 p-6 backdrop-blur-xl shadow-2xl">
-              <div className="flex items-center justify-between text-xs font-medium uppercase tracking-[0.2em] text-white/40">
-                <div className="flex items-center gap-3">
-                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                  <span>Time Machine</span>
+                <div className="mb-2 flex items-center justify-between text-xs text-white/70">
+                  <span>
+                    {historyIndex === -1
+                      ? "Latest"
+                      : (() => {
+                          const entry = activeGraphData.history?.[historyIndex] as any;
+                          if (entry?.timestamp) {
+                            return new Date(entry.timestamp * 1000).toLocaleDateString();
+                          }
+                          if (entry?.date) {
+                            return new Date(entry.date).toLocaleDateString();
+                          }
+                          return "Snapshot";
+                        })()}
+                  </span>
+                  <span className="text-white/50">
+                    {historyIndex === -1
+                      ? "Initial layout"
+                      : (() => {
+                          const entry = activeGraphData.history?.[historyIndex] as any;
+                          return entry?.message || entry?.hash || "Snapshot";
+                        })()}
+                  </span>
                 </div>
-                <span>{historyIndex === -1 ? "Origin / Latest" : new Date(graphData.history[historyIndex].timestamp * 1000).toLocaleDateString()}</span>
-              </div>
-
-              <div className="relative pt-2">
-                <input
-                  type="range"
-                  min="0"
-                  max={graphData.history.length}
-                  value={historyIndex === -1 ? graphData.history.length : (graphData.history.length - 1) - historyIndex}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    const L = graphData.history!.length;
+                {(() => {
+                  const history = activeGraphData.history || [];
+                  const L = history.length;
+                  const sliderValue = historyIndex === -1 ? L : (L - 1) - historyIndex;
+                  const handleChange = (val: number) => {
                     setHistoryIndex(val === L ? -1 : (L - 1) - val);
-                  }}
-                  className="w-full cursor-pointer accent-white"
-                  style={{
-                    height: '4px',
-                    appearance: 'none',
-                    background: 'rgba(255,255,255,0.1)',
-                    borderRadius: '2px',
-                    outline: 'none'
-                  }}
-                />
+                  };
+                  return (
+                    <input
+                      type="range"
+                      min="0"
+                      max={L}
+                      value={sliderValue}
+                      onChange={(e) => handleChange(parseInt(e.target.value, 10))}
+                      onInput={(e) => handleChange(parseInt((e.target as HTMLInputElement).value, 10))}
+                      className="w-full accent-cyan-300"
+                    />
+                  );
+                })()}
               </div>
-
-              {historyIndex !== -1 && (
-                <div className="text-center text-sm text-white/60 italic font-mono truncate px-4">
-                  "{graphData.history[historyIndex].message}"
-                </div>
-              )}
-            </div>
-          </div>
+            )}
+          </>
         )}
       </div>
 

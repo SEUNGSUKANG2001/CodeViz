@@ -137,6 +137,7 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
                   coverUrl={post.snapshot.coverUrl}
                   title={post.title}
                   theme={theme}
+                  planet={post.planet ?? null}
                   immersive={isImmersive}
                   onClose={() => setIsImmersive(false)}
                   projectId={post.projectLink?.projectId ?? null}

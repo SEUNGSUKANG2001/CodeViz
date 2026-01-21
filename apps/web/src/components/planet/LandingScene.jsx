@@ -496,6 +496,34 @@ function LandingCameraCue({ active, placement, planetRef, lockRef, override = fa
   return null;
 }
 
+function CityFocusRig({ target, enabled }) {
+  const { camera } = useThree();
+  const desiredPos = useRef(new THREE.Vector3());
+  const desiredTarget = useRef(new THREE.Vector3());
+
+  useFrame((_, dt) => {
+    if (!enabled || !target?.point || !target?.normal) return;
+    const point = new THREE.Vector3(...target.point);
+    const normal = new THREE.Vector3(...target.normal).normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    const tangent = up.clone().projectOnPlane(normal);
+    if (tangent.lengthSq() < 1e-6) tangent.set(1, 0, 0);
+    tangent.normalize();
+
+    desiredTarget.current.copy(point);
+    desiredPos.current
+      .copy(point)
+      .add(normal.clone().multiplyScalar(PLANET_RADIUS + 3.2))
+      .add(tangent.clone().multiplyScalar(1.4))
+      .add(up.clone().multiplyScalar(-0.6));
+
+    expDamp(camera.position, desiredPos.current, 3.2, dt);
+    camera.lookAt(desiredTarget.current);
+  });
+
+  return null;
+}
+
 function StarsOrbit({ active, groupRef }) {
   useFrame((_, dt) => {
     if (!active || !groupRef.current) return;
@@ -1711,7 +1739,13 @@ export default function LandingScene({
             planet={mainPlanet}
             position={[-2.2, -0.35, 0]}
             placementMode={false}
+            placement={placement}
+            focusId={mainPlanet?.id ?? null}
+            cityBuilt={cityBuilt}
+            cityGraphData={cityGraphData}
             cityTheme={cityTheme}
+            selectedNodeId={selectedNodeId}
+            onCityNodeSelect={onCityNodeSelect}
           />
         )}
 

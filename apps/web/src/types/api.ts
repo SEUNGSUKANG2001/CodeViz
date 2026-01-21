@@ -83,6 +83,14 @@ export interface PostDetail {
   body: string | null;
   tags: string[];
   author: UserSummary;
+  planet?: {
+    id: string;
+    seed: number;
+    params: Record<string, unknown>;
+    palette: Record<string, unknown>;
+    cloudColor: Record<string, unknown>;
+    projectId: string | null;
+  } | null;
   snapshot: {
     id: string;
     coverUrl: string | null;

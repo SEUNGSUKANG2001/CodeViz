@@ -129,6 +129,7 @@ export function PostModal({ postId, onClose }: Props) {
                     coverUrl={post.snapshot.coverUrl}
                     title={post.title}
                     theme={theme}
+                    planet={post.planet ?? null}
                   />
                 </div>
 
