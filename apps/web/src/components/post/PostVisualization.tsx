@@ -110,10 +110,6 @@ export function PostVisualization({
     imports: string[];
     usedBy: string[];
   } | null>(null);
-  const [cityFocusTarget, setCityFocusTarget] = useState<{
-    point: [number, number, number];
-    normal: [number, number, number];
-  } | null>(null);
 
   const placement = useMemo(() => {
     const anchor = (planet?.params as any)?.cityAnchor;
@@ -159,10 +155,6 @@ export function PostVisualization({
         lineCount: (node as any)?.lines ?? (node as any)?.lineCount ?? (node as any)?.loc ?? 0,
         imports,
         usedBy,
-      });
-      setCityFocusTarget({
-        point: [position.x, position.y, position.z],
-        normal: [normal.x, normal.y, normal.z],
       });
     };
   }, [activeGraphData]);
@@ -297,7 +289,6 @@ export function PostVisualization({
               enableOrbit={true}
               selectedNodeId={selectedCityNode?.id ?? null}
               onCityNodeSelect={handleCityNodeSelect}
-              cityFocusTarget={cityFocusTarget}
             />
           )}
         </div>

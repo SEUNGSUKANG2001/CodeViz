@@ -59,7 +59,7 @@ export function PostDetailPageClient({ postId }: { postId: string }) {
         }}
       />
 
-      <TopNav isAuthed={!!post} />
+      {!isImmersive && <TopNav isAuthed={!!post} />}
 
       <div className="relative z-10 mx-auto grid max-w-[1600px] grid-cols-1 gap-12 px-10 pt-8 pb-16 lg:grid-cols-[1fr_280px]">
         {/* Main */}

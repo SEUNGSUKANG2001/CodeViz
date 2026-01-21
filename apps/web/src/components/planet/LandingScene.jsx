@@ -995,6 +995,37 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
   const nodePosRef = useRef(new Map());
   const nodeNormalRef = useRef(new Map());
   const { camera, gl } = useThree();
+  const [internalSelectedId, setInternalSelectedId] = useState(null);
+  const activeSelectedId = selectedNodeId ?? internalSelectedId;
+  const highlightEdges = useCallback((selectedId) => {
+    if (!edgeGroupRef.current) return;
+    edgeGroupRef.current.children.forEach((mesh) => {
+      const { sourceId, targetId } = mesh.userData || {};
+      const material = mesh.material;
+      const apply = (mat) => {
+        if (!mat?.color) return;
+        if (!selectedId) {
+          mat.color.set("#2f3338");
+          mat.opacity = 0.75;
+        } else if (sourceId === selectedId) {
+          mat.color.set("#00ffff");
+          mat.opacity = 1.0;
+        } else if (targetId === selectedId) {
+          mat.color.set("#ff1b8c");
+          mat.opacity = 1.0;
+        } else {
+          mat.color.set("#2f3338");
+          mat.opacity = 0.45;
+        }
+        mat.needsUpdate = true;
+      };
+      if (Array.isArray(material)) {
+        material.forEach(apply);
+      } else {
+        apply(material);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!groupRef.current || !placement?.point || !nodes.length) return;
@@ -1108,7 +1139,7 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
       const node = nodes[i];
       const height = Math.max(
         PLANET_RADIUS * 0.008,
-        Math.log((node.lines || node.loc || 10) + 1) * PLANET_RADIUS * 0.004
+        Math.log((node.lines || node.loc || 10) + 1) * PLANET_RADIUS * 0.005
       );
       const url = buildings[i % buildings.length];
       const surfacePos = surfacePositions[i];
@@ -1181,6 +1212,8 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
         }
         if (obj?.userData?.isRoad) continue;
         if (obj?.userData?.nodeId) {
+          setInternalSelectedId(obj.userData.nodeId);
+          highlightEdges(obj.userData.nodeId);
           onNodeSelect?.(obj.userData.nodeId, obj.userData.nodePosition, obj.userData.nodeNormal);
           break;
         }
@@ -1191,37 +1224,17 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
   }, [gl, camera, onNodeSelect]);
 
   useEffect(() => {
-    if (!edgeGroupRef.current) return;
-    edgeGroupRef.current.children.forEach((mesh) => {
-      const { sourceId, targetId } = mesh.userData || {};
-      const mat = mesh.material;
-      if (!mat) return;
-      if (!selectedNodeId) {
-        mat.color.set("#2f3338");
-        mat.opacity = 0.75;
-        return;
-      }
-      if (sourceId === selectedNodeId) {
-        mat.color.set("#00ffff");
-        mat.opacity = 1.0;
-      } else if (targetId === selectedNodeId) {
-        mat.color.set("#ff1b8c");
-        mat.opacity = 1.0;
-      } else {
-        mat.color.set("#2f3338");
-        mat.opacity = 0.45;
-      }
-    });
-  }, [selectedNodeId]);
+    highlightEdges(activeSelectedId);
+  }, [activeSelectedId, highlightEdges]);
 
   useEffect(() => {
     if (!ringRef.current) return;
-    if (!selectedNodeId) {
+    if (!activeSelectedId) {
       ringRef.current.visible = false;
       return;
     }
-    const pos = nodePosRef.current.get(selectedNodeId);
-    const normal = nodeNormalRef.current.get(selectedNodeId);
+    const pos = nodePosRef.current.get(activeSelectedId);
+    const normal = nodeNormalRef.current.get(activeSelectedId);
     if (!pos || !normal) {
       ringRef.current.visible = false;
       return;
@@ -1229,7 +1242,7 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
     ringRef.current.visible = true;
     ringRef.current.position.copy(pos);
     ringRef.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
-  }, [selectedNodeId]);
+  }, [activeSelectedId]);
 
   return <group ref={groupRef} />;
 }
