@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { apiFetch } from "@/lib/api";
 import type {
   FeedResponse,
@@ -454,6 +455,16 @@ function normalizeGraphData(data: GraphData): GraphData {
 }
 
 export default function LandingPage() {
+  return (
+    <Suspense fallback={<div className="h-screen w-screen bg-[#050505] flex items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+    </div>}>
+      <LandingPageClient />
+    </Suspense>
+  );
+}
+
+function LandingPageClient() {
   const [repoUrl, setRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [feed, setFeed] = useState<PostCard[]>([]);
@@ -492,6 +503,7 @@ export default function LandingPage() {
     normal: [number, number, number];
   } | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [captureFn, setCaptureFn] = useState<(() => Promise<string>) | null>(null);
   const isCustomizing = pendingProjectId !== null && customPlanets.length > 0;
   const [repos, setRepos] = useState<any[]>([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
@@ -502,6 +514,39 @@ export default function LandingPage() {
   const confirmAtRef = useRef<number | null>(null);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const targetProjectId = searchParams.get("projectId");
+
+  useEffect(() => {
+    if (!targetProjectId || !user) return;
+    (async () => {
+      try {
+        const res = await apiFetch<ProjectDetailResponse>(`/api/v1/projects/${targetProjectId}`);
+        if (!res.ok) return;
+        const project = res.data.project;
+        setLandingProject(project);
+        setRepoUrl(project.repoUrl);
+        setPendingProjectId(project.id);
+        setPendingJobId(project.latestJob?.id ?? null);
+
+        // Find associated planet
+        const planetsRes = await apiFetch<UserPlanetsResponse>("/api/v1/planets");
+        const matchingPlanet = planetsRes.data.items.find(p => p.projectId === project.id);
+        if (matchingPlanet) {
+          setFocusedPlanet(matchingPlanet);
+          const cityAnchor = matchingPlanet.params?.cityAnchor as any;
+          if (cityAnchor) {
+            setPlacement(cityAnchor);
+          }
+          setViewMode("carousel");
+          setCityBuilt(true);
+          setCityReady(true);
+        }
+      } catch (e) {
+        console.error("Failed to load target project", e);
+      }
+    })();
+  }, [targetProjectId, user]);
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
       if (!user) return;
@@ -881,12 +926,12 @@ export default function LandingPage() {
           onPlanetPick={
             placementMode
               ? (planet: PlanetSummary, point: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => {
-                  if (!focusedPlanet || planet.id !== focusedPlanet.id) return;
-                  setPlacement({
-                    point: [point.x, point.y, point.z],
-                    normal: [normal.x, normal.y, normal.z],
-                  });
-                }
+                if (!focusedPlanet || planet.id !== focusedPlanet.id) return;
+                setPlacement({
+                  point: [point.x, point.y, point.z],
+                  normal: [normal.x, normal.y, normal.z],
+                });
+              }
               : undefined
           }
           placementMode={placementMode}
@@ -903,6 +948,7 @@ export default function LandingPage() {
           selectedNodeId={selectedCityNode?.id ?? null}
           onCityNodeSelect={handleCityNodeSelect}
           cityFocusTarget={cityFocusTarget}
+          onCaptureReady={(fn: () => Promise<string>) => setCaptureFn(() => fn)}
         />
       </div>
 
@@ -1072,79 +1118,79 @@ export default function LandingPage() {
       </section>
 
       {!cityBuilt && (
-      <div
-        className="pointer-events-auto fixed bottom-16 right-10 z-[60] w-[320px] rounded-none border border-white/15 bg-white/5 p-4 text-sm text-white/85 backdrop-blur-[2px] transition-[transform,opacity] duration-[2400ms] ease-in-out"
-        style={{
-          transform: viewMode === "carousel" ? "translateY(0)" : "translateY(100vh)",
-          pointerEvents: viewMode === "carousel" ? "auto" : "none",
-          opacity: viewMode === "carousel" ? 1 : 0,
-        }}
-        aria-hidden={viewMode !== "carousel"}
-      >
-        <div className="text-xs uppercase tracking-[0.2em] text-white/60">
-          {isCustomizing ? "행성 연구소" : "행성 정보"}
-        </div>
-        <div className="mt-2 text-base font-semibold text-white/90">
-          {story?.title ?? (focusedPlanet ? focusedPlanet.id.slice(0, 8) : "—")}
-        </div>
-        <div className="mt-3 space-y-2 text-xs text-white/70">
-          {story?.lines?.map((line, idx) => (
-            <p key={idx} className="leading-relaxed text-white/70">
-              {line}
-            </p>
-          ))}
-          {!story && (
-            <>
-              <div>Seed: {focusedPlanet?.seed ?? "—"}</div>
-              <div>Project: {focusedPlanet?.projectId ?? "None"}</div>
-              <div>City: {focusedPlanet?.city?.cityJsonKey ? "Attached" : "None"}</div>
-            </>
+        <div
+          className="pointer-events-auto fixed bottom-16 right-10 z-[60] w-[320px] rounded-none border border-white/15 bg-white/5 p-4 text-sm text-white/85 backdrop-blur-[2px] transition-[transform,opacity] duration-[2400ms] ease-in-out"
+          style={{
+            transform: viewMode === "carousel" ? "translateY(0)" : "translateY(100vh)",
+            pointerEvents: viewMode === "carousel" ? "auto" : "none",
+            opacity: viewMode === "carousel" ? 1 : 0,
+          }}
+          aria-hidden={viewMode !== "carousel"}
+        >
+          <div className="text-xs uppercase tracking-[0.2em] text-white/60">
+            {isCustomizing ? "행성 연구소" : "행성 정보"}
+          </div>
+          <div className="mt-2 text-base font-semibold text-white/90">
+            {story?.title ?? (focusedPlanet ? focusedPlanet.id.slice(0, 8) : "—")}
+          </div>
+          <div className="mt-3 space-y-2 text-xs text-white/70">
+            {story?.lines?.map((line, idx) => (
+              <p key={idx} className="leading-relaxed text-white/70">
+                {line}
+              </p>
+            ))}
+            {!story && (
+              <>
+                <div>Seed: {focusedPlanet?.seed ?? "—"}</div>
+                <div>Project: {focusedPlanet?.projectId ?? "None"}</div>
+                <div>City: {focusedPlanet?.city?.cityJsonKey ? "Attached" : "None"}</div>
+              </>
+            )}
+          </div>
+          {isCustomizing && (
+            <div className="mt-5 space-y-3">
+              {placementMode && (
+                <div className="text-[11px] text-white/55">
+                  행성 표면을 클릭해 도시의 착륙 지점을 선택하세요.
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleTerraform}
+                disabled={terraforming || shipLandingActive || !pendingProjectId || (placementMode && !placement)}
+                className={cn(
+                  "w-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] transition",
+                  terraforming || shipLandingActive
+                    ? "bg-white/10 text-white/50"
+                    : "bg-cyan-300/90 text-black hover:bg-cyan-200"
+                )}
+              >
+                {terraforming
+                  ? "Terraforming..."
+                  : shipLandingActive
+                    ? "Landing..."
+                    : placementMode
+                      ? "Confirm Landing Site"
+                      : "Terraforming"}
+              </button>
+              <button
+                type="button"
+                onClick={handleTestLanding}
+                disabled={!pendingProjectId || (placementMode && !placement)}
+                className="w-full border border-white/20 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
+              >
+                Test Landing
+              </button>
+              <button
+                type="button"
+                onClick={handleExitCustomizing}
+                className="w-full border border-white/20 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
+              >
+                돌아가기
+              </button>
+            </div>
           )}
         </div>
-        {isCustomizing && (
-          <div className="mt-5 space-y-3">
-            {placementMode && (
-              <div className="text-[11px] text-white/55">
-                행성 표면을 클릭해 도시의 착륙 지점을 선택하세요.
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleTerraform}
-              disabled={terraforming || shipLandingActive || !pendingProjectId || (placementMode && !placement)}
-              className={cn(
-                "w-full border border-white/20 px-4 py-2 text-xs uppercase tracking-[0.2em] transition",
-                terraforming || shipLandingActive
-                  ? "bg-white/10 text-white/50"
-                  : "bg-cyan-300/90 text-black hover:bg-cyan-200"
-              )}
-            >
-              {terraforming
-                ? "Terraforming..."
-                : shipLandingActive
-                  ? "Landing..."
-                  : placementMode
-                    ? "Confirm Landing Site"
-                    : "Terraforming"}
-            </button>
-            <button
-              type="button"
-              onClick={handleTestLanding}
-              disabled={!pendingProjectId || (placementMode && !placement)}
-              className="w-full border border-white/20 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-            >
-              Test Landing
-            </button>
-            <button
-              type="button"
-              onClick={handleExitCustomizing}
-              className="w-full border border-white/20 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-            >
-              돌아가기
-            </button>
-          </div>
-        )}
-      </div>
       )}
 
       {cityBuilt && (
@@ -1232,23 +1278,23 @@ export default function LandingPage() {
                   {historyIndex === -1
                     ? "Latest"
                     : (() => {
-                        const entry = displayGraphData.history[historyIndex] as any;
-                        if (entry?.timestamp) {
-                          return new Date(entry.timestamp * 1000).toLocaleDateString();
-                        }
-                        if (entry?.date) {
-                          return new Date(entry.date).toLocaleDateString();
-                        }
-                        return "Snapshot";
-                      })()}
+                      const entry = displayGraphData.history[historyIndex] as any;
+                      if (entry?.timestamp) {
+                        return new Date(entry.timestamp * 1000).toLocaleDateString();
+                      }
+                      if (entry?.date) {
+                        return new Date(entry.date).toLocaleDateString();
+                      }
+                      return "Snapshot";
+                    })()}
                 </span>
                 <span className="text-white/50">
                   {historyIndex === -1
                     ? "Initial layout"
                     : (() => {
-                        const entry = displayGraphData.history[historyIndex] as any;
-                        return entry?.message || entry?.hash || "Snapshot";
-                      })()}
+                      const entry = displayGraphData.history[historyIndex] as any;
+                      return entry?.message || entry?.hash || "Snapshot";
+                    })()}
                 </span>
               </div>
               {(() => {
@@ -1280,7 +1326,7 @@ export default function LandingPage() {
               repoUrl={landingProject.repoUrl}
               currentConfig={{ ...(landingProject.currentConfig || {}), theme: cityTheme }}
               latestJobId={landingProject.latestJob?.id ?? null}
-              captureScreenshot={null}
+              captureScreenshot={captureFn}
             />
           )}
         </>

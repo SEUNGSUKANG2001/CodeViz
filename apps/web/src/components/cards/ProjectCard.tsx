@@ -18,7 +18,7 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
   return (
     <div className="group relative">
       <Link
-        href={`/p/${project.id}`}
+        href={`/?projectId=${project.id}`}
         className="block overflow-hidden rounded-3xl border border-white/5 bg-[#121212] transition-all hover:border-white/20 hover:shadow-2xl hover:shadow-indigo-500/10 active:scale-[0.98]"
       >
         <div className="relative aspect-[16/10] w-full overflow-hidden">
@@ -34,8 +34,8 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
           <div className="absolute inset-x-4 top-4 flex justify-end">
             <span
               className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider backdrop-blur-md ring-1 ${project.status === "ready"
-                  ? "bg-emerald-500/20 text-emerald-400 ring-emerald-500/30"
-                  : "bg-amber-500/20 text-amber-400 ring-amber-500/30"
+                ? "bg-emerald-500/20 text-emerald-400 ring-emerald-500/30"
+                : "bg-amber-500/20 text-amber-400 ring-amber-500/30"
                 }`}
             >
               {project.status}

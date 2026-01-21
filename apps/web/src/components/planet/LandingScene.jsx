@@ -184,6 +184,24 @@ function NebulaBackdrop({ radius = 95, sunDir = [0.8, 0.3, 0.45] }) {
   );
 }
 
+function ScreenshotManager({ onCaptureReady }) {
+  const { gl, scene, camera } = useThree();
+
+  useEffect(() => {
+    if (!onCaptureReady) return;
+
+    const capture = async () => {
+      // Force a render to ensure the buffer is up to date
+      gl.render(scene, camera);
+      return gl.domElement.toDataURL("image/png");
+    };
+
+    onCaptureReady(capture);
+  }, [gl, scene, camera, onCaptureReady]);
+
+  return null;
+}
+
 function CameraRig({ mode, targets, enabled = true }) {
   const { camera } = useThree();
   const targetRef = useRef(new THREE.Vector3(...targets.main.target));
@@ -885,7 +903,7 @@ function LandingCharacters({ placement, count = 4 }) {
         obj.scale.setScalar(scale);
         setModel(obj);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       mounted = false;
     };
@@ -1100,7 +1118,7 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
           wrapper.add(obj);
           groupRef.current?.add(wrapper);
         })
-        .catch(() => {});
+        .catch(() => { });
     }
     if (!ringRef.current) {
       const ringGeo = new THREE.RingGeometry(PLANET_RADIUS * 0.02, PLANET_RADIUS * 0.028, 36);
@@ -1284,7 +1302,7 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey, c
         group.scale.setScalar(0.09);
         setShip(group);
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       mounted = false;
     };
@@ -1471,6 +1489,7 @@ export default function LandingScene({
   cityGraphData = null,
   cityTheme = "Thema1",
   enableOrbit = false,
+  onCaptureReady,
 }) {
   const [dragOffset, setDragOffset] = useState(0);
   const [targetOffset, setTargetOffset] = useState(0);
@@ -1623,12 +1642,18 @@ export default function LandingScene({
       <Canvas
         dpr={mode === "carousel" ? [1, 1] : [1, 1.25]}
         camera={{ position: targets.main.position, fov: 34, near: 0.1, far: 200 }}
-        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+        gl={{
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+          preserveDrawingBuffer: true,
+        }}
         style={{ touchAction: "none" }}
         onCreated={({ gl: renderer }) => {
           renderer.setClearColor(new THREE.Color("#050814"), 1);
         }}
       >
+        <ScreenshotManager onCaptureReady={onCaptureReady} />
         <NebulaBackdrop radius={95} sunDir={[0.8, 0.3, 0.45]} />
         <group ref={starsRef}>
           <Stars />
@@ -1705,23 +1730,23 @@ export default function LandingScene({
                   placement={placement}
                   focusId={focusId}
                   enableRotateDrag={placementMode && focusId === planet.id && !shipLandingActive}
-                shipLandingActive={shipLandingActive}
-                onShipArrive={onShipArrive}
-                shipTestMode={shipTestMode}
-                shipLandingKey={shipLandingKey}
-                registerActiveRef={(ref) => {
-                  if (ref) activePlanetRef.current = ref;
-                }}
+                  shipLandingActive={shipLandingActive}
+                  onShipArrive={onShipArrive}
+                  shipTestMode={shipTestMode}
+                  shipLandingKey={shipLandingKey}
+                  registerActiveRef={(ref) => {
+                    if (ref) activePlanetRef.current = ref;
+                  }}
                   cityBuilt={cityBuilt}
                   cityGraphData={cityGraphData}
                   cityTheme={cityTheme}
                   selectedNodeId={selectedNodeId}
                   onCityNodeSelect={onCityNodeSelect}
-              />
-            );
-          })}
-        </group>
-      )}
+                />
+              );
+            })}
+          </group>
+        )}
         {mode === "carousel" && shipLandingActive && placementWorld && (
           <TrainLanding
             active={shipLandingActive}

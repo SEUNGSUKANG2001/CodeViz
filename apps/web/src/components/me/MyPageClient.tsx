@@ -9,11 +9,13 @@ import { ProfileSidebar } from "@/components/me/ProfileSidebar";
 import { NewProjectDialog } from "@/components/modals/NewProjectDialog";
 
 import { ProjectCard } from "@/components/cards/ProjectCard";
+import { PostCard } from "@/components/cards/PostCard";
 
 export function MyPageClient() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [projects, setProjects] = useState<ProjectCardT[]>([]);
-  const [tab, setTab] = useState<"all" | "draft" | "ready">("all");
+  const [posts, setPosts] = useState<any[]>([]);
+  const [tab, setTab] = useState<"projects" | "posts">("projects");
   const [openNew, setOpenNew] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -29,22 +31,28 @@ export function MyPageClient() {
   }, []);
 
   useEffect(() => {
+    if (!me?.ok) return;
     (async () => {
       setLoading(true);
       try {
-        const qs = new URLSearchParams();
-        qs.set("scope", "mine");
-        qs.set("limit", "48");
-        if (tab !== "all") qs.set("status", tab);
-        const res = await apiFetch<MyProjectsResponse>(`/api/v1/projects?${qs.toString()}`);
-        setProjects(res.data.items);
+        if (tab === "projects") {
+          const qs = new URLSearchParams();
+          qs.set("scope", "mine");
+          qs.set("limit", "48");
+          const res = await apiFetch<MyProjectsResponse>(`/api/v1/projects?${qs.toString()}`);
+          setProjects(res.data.items);
+        } else {
+          const res = await apiFetch<any>(`/api/v1/users/${me.data.user.id}/posts?limit=48`);
+          setPosts(res.data.items);
+        }
       } catch {
-        setProjects([]);
+        if (tab === "projects") setProjects([]);
+        else setPosts([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [tab]);
+  }, [tab, me]);
 
   async function onDeleteProject(projectId: string, e: React.MouseEvent) {
     e.preventDefault();
@@ -128,18 +136,24 @@ export function MyPageClient() {
 
           {/* Tabs */}
           <div className="flex gap-2 rounded-2xl bg-white/5 p-1 w-fit border border-white/5">
-            {(["all", "draft", "ready"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`rounded-xl px-5 py-2 text-sm font-medium transition-all ${tab === t
-                  ? "bg-white text-black shadow-xl"
-                  : "text-neutral-400 hover:text-white hover:bg-white/5"
-                  }`}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+            <button
+              onClick={() => setTab("projects")}
+              className={`rounded-xl px-5 py-2 text-sm font-medium transition-all ${tab === "projects"
+                ? "bg-white text-black shadow-xl"
+                : "text-neutral-400 hover:text-white hover:bg-white/5"
+                }`}
+            >
+              My Projects
+            </button>
+            <button
+              onClick={() => setTab("posts")}
+              className={`rounded-xl px-5 py-2 text-sm font-medium transition-all ${tab === "posts"
+                ? "bg-white text-black shadow-xl"
+                : "text-neutral-400 hover:text-white hover:bg-white/5"
+                }`}
+            >
+              My Posts
+            </button>
           </div>
 
           {/* Grid */}
@@ -149,23 +163,35 @@ export function MyPageClient() {
               <div className="h-2 w-2 animate-bounce rounded-full bg-indigo-500 [animation-delay:0.2s]" />
               <div className="h-2 w-2 animate-bounce rounded-full bg-indigo-500 [animation-delay:0.4s]" />
             </div>
-          ) : projects.length === 0 ? (
+          ) : (tab === "projects" ? projects.length : posts.length) === 0 ? (
             <div className="py-24 text-center">
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white/5 border border-white/10 mb-6">
                 <svg className="h-10 w-10 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-white">No projects yet</h3>
+              <h3 className="text-lg font-medium text-white">
+                {tab === "projects" ? "No projects yet" : "No posts yet"}
+              </h3>
               <p className="mt-2 text-sm text-neutral-500 max-w-[280px] mx-auto">
-                Start by creating your first project to visualize your code.
+                {tab === "projects"
+                  ? "Start by creating your first project to visualize your code."
+                  : "Share your visualizations with the community to see them here."}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 xl:grid-cols-3">
-              {projects.map((p) => (
-                <ProjectCard key={p.id} project={p} onDelete={onDeleteProject} />
-              ))}
+              {tab === "projects" ? (
+                projects.map((p) => (
+                  <ProjectCard key={p.id} project={p} onDelete={onDeleteProject} />
+                ))
+              ) : (
+                posts.map((post) => (
+                  <Link key={post.postId} href={`/post/${post.postId}`}>
+                    <PostCard item={post} />
+                  </Link>
+                ))
+              )}
             </div>
           )
           }
