@@ -28,15 +28,21 @@ GitHub 레포를 입력받아 코드 구조를 분석하고 3D로 시각화하�
 
 ## 기술 스택
 
-- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui
+- **Frontend**: Next.js 14, React, Three.js, `@react-three/fiber`, Tailwind CSS, Framer Motion
 - **Backend**: Next.js API Routes, Prisma ORM
-- **Database**: PostgreSQL 15
-- **Cache/Queue**: Redis 7
-- **Worker**: Python 3.11, RQ (Redis Queue)
-- **Storage**: AWS S3 (Presigned URLs for private objects)
-- **Auth**: Kakao OAuth + Session Cookies
+- **Worker**: Python (AST Analysis), Redis RQ
+- **Database**: PostgreSQL, Redis
+- **Infrastructure**: AWS S3 (Storage), Docker & Docker Compose
+- **Authentication**: Kakao OAuth
 
-## 로컬 개발 환경 설정
+## 👥 팀원
+
+- **강승수**: [SEUNGSUKANG2001](https://github.com/SEUNGSUKANG2001)
+- **고건영**: [koheon2](https://github.com/koheon2)
+
+---
+
+## 💻 로컬 개발 환경 설정
 
 ### 1. 사전 요구사항
 
@@ -55,14 +61,19 @@ cp .env.example apps/worker/.env
 
 각 `.env` 파일을 열어 실제 값으로 수정하세요.
 
-### 3. 데이터베이스 및 Redis 시작
+### 3. Docker Compose로 전체 실행
 
 ```bash
-docker-compose up -d db redis
+# 빌드 및 실행
+docker compose up --build
+
+# 백그라운드 실행
+docker compose up -d
 ```
 
-### 4. Web 서버 실행
+### 4. 수동 실행 (개발용)
 
+**Web 서버:**
 ```bash
 cd apps/web
 npm install
@@ -71,8 +82,7 @@ npx prisma migrate dev
 npm run dev
 ```
 
-### 5. Worker 실행 (별도 터미널)
-
+**Worker:**
 ```bash
 cd apps/worker
 python -m venv venv
@@ -81,28 +91,9 @@ pip install -r requirements.txt
 python -m src.worker
 ```
 
-## Docker Compose로 전체 실행
+---
 
-```bash
-# 빌드 및 실행 (migrate 서비스가 자동으로 DB 마이그레이션 실행)
-docker compose up --build
-
-# 백그라운드 실행
-docker compose up -d
-
-# 로그 확인
-docker compose logs -f web
-docker compose logs -f worker
-docker compose logs migrate  # 마이그레이션 로그
-
-# 종료
-docker compose down
-
-# 볼륨 포함 완전 초기화
-docker compose down -v
-```
-
-## API 엔드포인트
+## 🔌 API 엔드포인트
 
 ### Auth
 - `GET /api/v1/auth/kakao/start` - Kakao OAuth 시작
@@ -142,110 +133,55 @@ docker compose down -v
 - `GET /api/v1/users/{id}` - 사용자 프로필
 - `GET /api/v1/users/{id}/posts` - 사용자 게시글
 
-### Uploads
-- `POST /api/v1/uploads` - Presigned URL 발급
+---
 
-## EC2 배포 가이드
+## ☁️ EC2 배포 가이드
 
-### 1. EC2 인스턴스 준비
-
-- Ubuntu 22.04 LTS 권장
-- t3.medium 이상 (2 vCPU, 4GB RAM)
-- 보안 그룹: 22 (SSH), 80/443 (HTTP/HTTPS), 3000 (앱) 포트 열기
-
-### 2. Docker 설치
-
+### 1. Docker 설치 및 설정
 ```bash
 sudo apt update
 sudo apt install -y docker.io docker-compose
 sudo usermod -aG docker $USER
-# 재로그인 필요
+# 재로그인 후 적용
 ```
 
-### 3. 코드 배포
-
+### 2. 실행 가이드
 ```bash
-git clone <your-repo> /home/ubuntu/codeviz
-cd /home/ubuntu/codeviz
-```
-
-### 4. 환경 변수 설정
-
-```bash
+git clone <your-repo>
+cd codeviz
 cp .env.example apps/web/.env
 cp .env.example apps/worker/.env
-# nano 또는 vim으로 각 .env 파일 수정
-```
-
-### 5. 실행
-
-```bash
+# .env 수정 후
 docker-compose up -d --build
 ```
 
-### 6. Nginx 리버스 프록시 (선택사항)
-
-```bash
-sudo apt install nginx
-```
-
+### 3. Nginx 리버스 프록시 설정
 `/etc/nginx/sites-available/codeviz`:
 ```nginx
 server {
     listen 80;
     server_name your-domain.com;
-
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
     }
 }
 ```
 
-```bash
-sudo ln -s /etc/nginx/sites-available/codeviz /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
+---
 
-## 데이터베이스 마이그레이션
-
-개발 환경:
-```bash
-cd apps/web
-npx prisma migrate dev
-```
-
-프로덕션 환경:
-```bash
-cd apps/web
-npx prisma migrate deploy
-```
-
-## 문제 해결
+## 🛠 문제 해결 (Troubleshooting)
 
 ### Worker가 Job을 처리하지 않음
 1. Redis 연결 확인: `docker-compose logs redis`
 2. Worker 로그 확인: `docker-compose logs worker`
 3. 큐 상태 확인: `redis-cli LLEN codeviz:jobs`
 
-### 데이터베이스 연결 오류
-1. PostgreSQL 상태 확인: `docker-compose logs db`
-2. DATABASE_URL 환경 변수 확인
-
-### S3 업로드 실패
-1. AWS 자격 증명 확인
-2. S3 버킷 권한 확인 (PutObject, GetObject)
-
-### S3 CORS 오류 (Failed to fetch graph data)
-
-S3 버킷에 CORS 설정이 필요합니다.
-
-**AWS Console → S3 → 버킷 → Permissions → CORS:**
+### S3 CORS 설정
+브라우저에서 그래프 데이터를 가져오지 못하는 경우 S3 버킷에 아래 CORS 설정이 필요합니다.
 
 ```json
 [
@@ -259,9 +195,11 @@ S3 버킷에 CORS 설정이 필요합니다.
 ]
 ```
 
-## 프로젝트 구조
+---
 
-```
+## 🏗 프로젝트 구조
+
+```text
 codeviz/
 ├── apps/
 │   ├── web/                    # Next.js 앱 (Frontend + Backend API)
@@ -271,17 +209,15 @@ codeviz/
 │   │   │   └── lib/            # Utilities (auth, prisma, s3, etc.)
 │   │   ├── prisma/             # Database schema & migrations
 │   │   └── Dockerfile
-│   │
 │   └── worker/                 # Python RQ Worker
 │       ├── src/
 │       │   ├── jobs/           # Job handlers
 │       │   └── services/       # DB, S3, analyzer services
 │       └── Dockerfile
-│
 ├── docker-compose.yml
 └── README.md
 ```
 
-## 라이선스
+## 📄 라이선스
 
-MIT
+MIT License
