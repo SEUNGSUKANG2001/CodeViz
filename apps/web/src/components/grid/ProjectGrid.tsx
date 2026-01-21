@@ -25,6 +25,9 @@ export function ProjectGrid({ items }: Props) {
           onDelete={() => {
             // no-op for grid view
           }}
+          onOpen={() => {
+            // no-op for grid view
+          }}
         />
       ))}
     </div>

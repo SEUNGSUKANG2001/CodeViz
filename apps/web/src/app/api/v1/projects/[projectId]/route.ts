@@ -45,8 +45,26 @@ export async function GET(request: NextRequest, { params }: Params) {
     return ERR_FORBIDDEN();
   }
 
+  const planet = await prisma.planet.findFirst({
+    where: {
+      projectId: project.id,
+      ownerId: auth.user.id,
+    },
+    select: {
+      id: true,
+      seed: true,
+      params: true,
+      palette: true,
+      cloudColor: true,
+      projectId: true,
+    },
+  });
+
   return successResponse({
-    project: formatProjectDetail(project),
+    project: {
+      ...formatProjectDetail(project),
+      planet,
+    },
   });
 }
 

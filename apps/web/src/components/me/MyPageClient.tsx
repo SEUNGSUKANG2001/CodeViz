@@ -10,6 +10,7 @@ import { NewProjectDialog } from "@/components/modals/NewProjectDialog";
 
 import { ProjectCard } from "@/components/cards/ProjectCard";
 import { PostCard } from "@/components/cards/PostCard";
+import { ProjectViewerModal } from "@/components/me/ProjectViewerModal";
 
 export function MyPageClient() {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -18,6 +19,7 @@ export function MyPageClient() {
   const [tab, setTab] = useState<"projects" | "posts">("projects");
   const [openNew, setOpenNew] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -183,7 +185,12 @@ export function MyPageClient() {
             <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 xl:grid-cols-3">
               {tab === "projects" ? (
                 projects.map((p) => (
-                  <ProjectCard key={p.id} project={p} onDelete={onDeleteProject} />
+                  <ProjectCard
+                    key={p.id}
+                    project={p}
+                    onDelete={onDeleteProject}
+                    onOpen={(id) => setSelectedProjectId(id)}
+                  />
                 ))
               ) : (
                 posts.map((post) => (
@@ -199,6 +206,13 @@ export function MyPageClient() {
           <NewProjectDialog open={openNew} onOpenChange={setOpenNew} />
         </section>
       </div>
+
+      {selectedProjectId && (
+        <ProjectViewerModal
+          projectId={selectedProjectId}
+          onClose={() => setSelectedProjectId(null)}
+        />
+      )}
     </main>
   );
 }

@@ -61,6 +61,14 @@ export interface ProjectDetail extends ProjectCard {
   currentConfig: Record<string, unknown>;
   latestJob: AnalysisJob | null;
   createdAt: string;
+  planet?: {
+    id: string;
+    seed: number;
+    params: Record<string, unknown>;
+    palette: Record<string, unknown>;
+    cloudColor: Record<string, unknown>;
+    projectId: string | null;
+  } | null;
 }
 
 // Post types

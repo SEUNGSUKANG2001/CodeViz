@@ -82,6 +82,7 @@ export type ProjectDetailResponse = {
       status: string;
       coverUrl?: string | null;
       currentConfig?: Record<string, unknown>;
+      planet?: PlanetSummary | null;
       latestJob?: {
         id: string;
         status: "queued" | "running" | "done" | "failed" | "canceled";
