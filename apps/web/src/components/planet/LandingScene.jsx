@@ -997,6 +997,8 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
   const { camera, gl } = useThree();
   const [internalSelectedId, setInternalSelectedId] = useState(null);
   const activeSelectedId = selectedNodeId ?? internalSelectedId;
+  const lastSelectedRef = useRef(null);
+  const clickStartRef = useRef({ x: 0, y: 0, moved: false });
   const highlightEdges = useCallback((selectedId) => {
     if (!edgeGroupRef.current) return;
     edgeGroupRef.current.children.forEach((mesh) => {
@@ -1199,7 +1201,17 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
   useEffect(() => {
     if (!gl?.domElement) return;
     const onPointerDown = (e) => {
-      if (!groupRef.current) return;
+      clickStartRef.current = { x: e.clientX, y: e.clientY, moved: false };
+    };
+    const onPointerMove = (e) => {
+      const dx = e.clientX - clickStartRef.current.x;
+      const dy = e.clientY - clickStartRef.current.y;
+      if (Math.hypot(dx, dy) > 6) {
+        clickStartRef.current.moved = true;
+      }
+    };
+    const onPointerUp = (e) => {
+      if (!groupRef.current || clickStartRef.current.moved) return;
       const rect = gl.domElement.getBoundingClientRect();
       pointer.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1220,12 +1232,24 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
       }
     };
     gl.domElement.addEventListener("pointerdown", onPointerDown);
-    return () => gl.domElement.removeEventListener("pointerdown", onPointerDown);
-  }, [gl, camera, onNodeSelect]);
+    gl.domElement.addEventListener("pointermove", onPointerMove);
+    gl.domElement.addEventListener("pointerup", onPointerUp);
+    return () => {
+      gl.domElement.removeEventListener("pointerdown", onPointerDown);
+      gl.domElement.removeEventListener("pointermove", onPointerMove);
+      gl.domElement.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [gl, camera, onNodeSelect, highlightEdges]);
 
   useEffect(() => {
     highlightEdges(activeSelectedId);
   }, [activeSelectedId, highlightEdges]);
+
+  useFrame(() => {
+    if (lastSelectedRef.current === activeSelectedId) return;
+    lastSelectedRef.current = activeSelectedId;
+    highlightEdges(activeSelectedId);
+  });
 
   useEffect(() => {
     if (!ringRef.current) return;

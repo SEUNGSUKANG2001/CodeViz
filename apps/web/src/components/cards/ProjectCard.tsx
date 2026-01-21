@@ -10,16 +10,18 @@ const GraphThumbnail = dynamic(
 interface ProjectCardProps {
   project: ProjectCardT;
   onDelete: (projectId: string, e: React.MouseEvent) => void;
+  onOpen: (projectId: string) => void;
 }
 
-export function ProjectCard({ project, onDelete }: ProjectCardProps) {
+export function ProjectCard({ project, onDelete, onOpen }: ProjectCardProps) {
   const theme = (project.currentConfig?.theme as "Thema1" | "Thema2" | "Thema3") || "Thema1";
 
   return (
     <div className="group relative">
-      <Link
-        href={`/?projectId=${project.id}`}
-        className="block overflow-hidden rounded-3xl border border-white/5 bg-[#121212] transition-all hover:border-white/20 hover:shadow-2xl hover:shadow-indigo-500/10 active:scale-[0.98]"
+      <button
+        type="button"
+        onClick={() => onOpen(project.id)}
+        className="block w-full overflow-hidden rounded-3xl border border-white/5 bg-[#121212] text-left transition-all hover:border-white/20 hover:shadow-2xl hover:shadow-indigo-500/10 active:scale-[0.98]"
       >
         <div className="relative aspect-[16/10] w-full overflow-hidden">
           <GraphThumbnail
@@ -56,7 +58,7 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
             </span>
           </div>
         </div>
-      </Link>
+      </button>
 
       {/* Outer Delete Button */}
       <button
