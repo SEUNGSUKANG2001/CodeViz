@@ -25,7 +25,10 @@ export function GraphThumbnail({
           <img
             src={coverUrl}
             alt={title}
-            onError={() => setError(true)}
+            onError={() => {
+              console.error(`[GraphThumbnail] Failed to load image: ${coverUrl}`);
+              setError(true);
+            }}
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (

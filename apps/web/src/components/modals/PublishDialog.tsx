@@ -74,7 +74,6 @@ export function PublishDialog({
                 body: blob,
                 headers: {
                   "Content-Type": "image/png",
-                  "x-amz-acl": "public-read"
                 }
               });
 
@@ -85,26 +84,8 @@ export function PublishDialog({
               coverUploadId = uploadId;
               console.log("✅ [Publish] Screenshot uploaded to S3 successfully:", coverUploadId);
             } catch (s3Err) {
-              console.error("⚠️ [Publish] S3 upload failed, trying local fallback:", s3Err);
-
-              // FALLBACK: Upload to local server
-              const formData = new FormData();
-              formData.append('file', blob, 'cover.png');
-              formData.append('type', 'post_cover');
-
-              console.log("[Publish] Attempting local upload fallback...");
-              const localRes = await fetch("/api/v1/uploads/local", {
-                method: "POST",
-                body: formData,
-              });
-
-              if (!localRes.ok) {
-                throw new Error(`Local fallback failed with status ${localRes.status}`);
-              }
-
-              const localData = await localRes.json();
-              coverUploadId = localData.data.upload.uploadId;
-              console.log("✅ [Publish] Screenshot uploaded to LOCAL fallback successfully:", coverUploadId);
+              console.error("❌ [Publish] S3 upload failed:", s3Err);
+              throw s3Err; // Re-throw to prevent fallback
             }
           } else {
             console.warn("[Publish] Capture returned empty dataUrl");
@@ -116,6 +97,7 @@ export function PublishDialog({
       }
 
       // 1) Create snapshot
+      console.log(`[Publish] Creating snapshot for project ${projectId} with coverUploadId: ${coverUploadId}`);
       const snapRes = await apiFetch<CreateSnapshotResponse>(
         `/api/v1/projects/${projectId}/snapshots`,
         {
@@ -127,6 +109,7 @@ export function PublishDialog({
           },
         }
       );
+      console.log(`[Publish] Snapshot created: ${snapRes.data.snapshot.id}, coverUrl: ${snapRes.data.snapshot.coverUrl}`);
 
       // 2) Create post
       const postRes = await apiFetch<CreatePostResponse>("/api/v1/posts", {

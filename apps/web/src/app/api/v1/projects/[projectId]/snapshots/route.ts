@@ -63,6 +63,9 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     if (upload && upload.createdBy === auth.user.id) {
       coverUrl = upload.publicUrl;
+      console.log(`[SnapshotsAPI] Found upload record. ID: ${body.coverUploadId}, Public URL: ${coverUrl}`);
+    } else {
+      console.warn(`[SnapshotsAPI] Upload record not found or unauthorized. ID: ${body.coverUploadId}`);
     }
   }
 
@@ -80,6 +83,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     });
 
     // Also update project's coverUrl and status
+    console.log(`[SnapshotsAPI] Updating project ${projectId} with coverUrl: ${coverUrl}`);
     await tx.project.update({
       where: { id: projectId },
       data: {
