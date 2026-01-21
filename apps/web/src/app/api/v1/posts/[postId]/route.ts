@@ -45,6 +45,20 @@ export async function GET(request: NextRequest, { params }: Params) {
     return ERR_NOT_FOUND();
   }
 
+  const planet = post.snapshot.projectId
+    ? await prisma.planet.findFirst({
+        where: { projectId: post.snapshot.projectId },
+        select: {
+          id: true,
+          seed: true,
+          params: true,
+          palette: true,
+          cloudColor: true,
+          projectId: true,
+        },
+      })
+    : null;
+
   return successResponse({
     post: {
       id: post.id,
@@ -53,6 +67,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       body: post.body,
       tags: post.tags,
       author: formatUserSummary(post.author),
+      planet,
       snapshot: {
         id: post.snapshot.id,
         coverUrl: post.snapshot.coverUrl,
