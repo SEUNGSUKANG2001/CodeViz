@@ -544,27 +544,6 @@ function LandingPageClient() {
     })();
   }, [targetProjectId, user]);
   useEffect(() => {
-    const onWheel = (e: WheelEvent) => {
-      if (!user) return;
-      if (isCustomizing) return;
-      if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) return;
-      if (wheelLockRef.current) return;
-      if (Math.abs(e.deltaY) < 2) return;
-      if (e.deltaY > 0) {
-        setViewMode("carousel");
-      } else {
-        setViewMode("main");
-      }
-      wheelLockRef.current = true;
-      setTimeout(() => {
-        wheelLockRef.current = false;
-      }, 500);
-    };
-    window.addEventListener("wheel", onWheel, { passive: true });
-    return () => window.removeEventListener("wheel", onWheel);
-  }, [user, isCustomizing]);
-
-  useEffect(() => {
     if (!user) {
       document.body.style.overflow = "hidden";
       document.documentElement.style.overflow = "hidden";
@@ -700,6 +679,31 @@ function LandingPageClient() {
     }
   }, []);
 
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (!user) return;
+      if (isCustomizing) return;
+      if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) return;
+      if (wheelLockRef.current) return;
+      if (Math.abs(e.deltaY) < 2) return;
+      if (e.deltaY > 0) {
+        setViewMode("carousel");
+      } else {
+        if (viewMode === "carousel" && focusedPlanet?.id) {
+          handleSelectPlanet(focusedPlanet.id);
+        } else {
+          setViewMode("main");
+        }
+      }
+      wheelLockRef.current = true;
+      setTimeout(() => {
+        wheelLockRef.current = false;
+      }, 500);
+    };
+    window.addEventListener("wheel", onWheel, { passive: true });
+    return () => window.removeEventListener("wheel", onWheel);
+  }, [user, isCustomizing, focusedPlanet, viewMode, handleSelectPlanet]);
+
   const showCustomCarousel = isCustomizing && !cityBuilt;
 
   useEffect(() => {
@@ -827,17 +831,6 @@ function LandingPageClient() {
       window.clearTimeout(cityReadyTimerRef.current);
     }
     confirmAtRef.current = Date.now();
-    setShipLandingActive(true);
-    setShipLandingKey((prev) => prev + 1);
-  };
-
-  const handleTestLanding = () => {
-    if (!placementMode) {
-      setPlacementMode(true);
-      return;
-    }
-    if (!placement) return;
-    setShipTestMode(true);
     setShipLandingActive(true);
     setShipLandingKey((prev) => prev + 1);
   };
@@ -970,6 +963,14 @@ function LandingPageClient() {
               >
                 Explore
               </Link>
+              {user && (
+                <Link
+                  href="/me"
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 backdrop-blur-md transition hover:bg-white/10 hover:text-cyan-300"
+                >
+                  My Page
+                </Link>
+              )}
               {user ? (
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col items-end">
@@ -1105,8 +1106,10 @@ function LandingPageClient() {
             </div>
           </div>
 
-          <div className="mt-auto pb-10 text-xs text-white/50">
-            Scroll to explore the universe ↓
+          <div className="mt-auto pb-10">
+            <div className="inline-flex items-center gap-2 rounded-none border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200">
+              스크롤로 내 행성을 선택하세요 ↓
+            </div>
           </div>
         </div>
       </section>
@@ -1124,6 +1127,16 @@ function LandingPageClient() {
           <div className="text-xs uppercase tracking-[0.2em] text-white/60">
             {isCustomizing ? "행성 연구소" : "행성 정보"}
           </div>
+          {!isCustomizing && (
+            <div className="mt-2 text-[11px] text-white/55">
+              ← / → 로 행성 이동 · 스크롤 또는 클릭으로 선택
+            </div>
+          )}
+          {isCustomizing && (
+            <div className="mt-2 text-[11px] text-white/55">
+              드래그로 행성 회전 · 표면 클릭으로 착륙 지점 선택
+            </div>
+          )}
           <div className="mt-2 text-base font-semibold text-white/90">
             {story?.title ?? (focusedPlanet ? focusedPlanet.id.slice(0, 8) : "—")}
           </div>
@@ -1166,14 +1179,6 @@ function LandingPageClient() {
                     : placementMode
                       ? "Confirm Landing Site"
                       : "Terraforming"}
-              </button>
-              <button
-                type="button"
-                onClick={handleTestLanding}
-                disabled={!pendingProjectId || (placementMode && !placement)}
-                className="w-full border border-white/20 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70 hover:bg-white/10"
-              >
-                Test Landing
               </button>
               <button
                 type="button"
