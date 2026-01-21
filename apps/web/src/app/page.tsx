@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -12,7 +12,13 @@ import type {
   Author,
   PlanetSummary,
   UserPlanetsResponse,
+  ProjectDetailResponse,
+  ResultUrlResponse,
+  GraphData,
 } from "@/lib/types";
+import type { ThemeType } from "@/components/viewer/useCodeCityViewer";
+import { ControlsPanel } from "@/components/viewer/ControlsPanel";
+import { PublishDialog } from "@/components/modals/PublishDialog";
 
 const LandingScene = dynamic<any>(
   () => import("@/components/planet/LandingScene"),
@@ -397,6 +403,56 @@ function buildPlanetLore(planet: PlanetSummary) {
   };
 }
 
+function buildGraphFromFiles(files: Record<string, any>) {
+  const nodes = Object.entries(files).map(([path, info]) => ({
+    id: path,
+    name: path.split("/").pop() || path,
+    path,
+    type: "file",
+    lines: info.line_count ?? info.lineCount ?? info.linecount ?? 10,
+  }));
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const edges: any[] = [];
+  Object.entries(files).forEach(([sourcePath, info]) => {
+    const deps = info.depends_on || info.dependsOn || [];
+    deps.forEach((dep: any) => {
+      const targetId = dep.target || dep.id || dep.path;
+      if (!targetId) return;
+      if (!nodeIds.has(targetId)) {
+        nodeIds.add(targetId);
+        nodes.push({
+          id: targetId,
+          name: targetId.split("/").pop() || targetId,
+          path: targetId,
+          type: "file",
+          lines: 10,
+        });
+      }
+      edges.push({ source: sourcePath, target: targetId, type: dep.type || "import" });
+    });
+  });
+  return { nodes, edges };
+}
+
+function normalizeGraphData(data: GraphData): GraphData {
+  if (data?.nodes?.length) return data;
+  const history = (data as any)?.history;
+  if (Array.isArray(history) && history.length > 0) {
+    const latest = history[history.length - 1];
+    if (latest?.files) {
+      return { ...data, ...buildGraphFromFiles(latest.files) };
+    }
+  }
+  const snapshots = data?.snapshots;
+  if (Array.isArray(snapshots) && snapshots.length > 0) {
+    const latest = snapshots[snapshots.length - 1];
+    if (latest?.files) {
+      return { ...data, ...buildGraphFromFiles(latest.files) };
+    }
+  }
+  return data;
+}
+
 export default function LandingPage() {
   const [repoUrl, setRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -418,12 +474,32 @@ export default function LandingPage() {
   const [shipTestMode, setShipTestMode] = useState(false);
   const [shipLandingKey, setShipLandingKey] = useState(0);
   const [cityBuilt, setCityBuilt] = useState(false);
+  const [cityGraphData, setCityGraphData] = useState<GraphData | null>(null);
+  const [landingProject, setLandingProject] = useState<ProjectDetailResponse["data"]["project"] | null>(null);
+  const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [cityTheme, setCityTheme] = useState<ThemeType>("Thema1");
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [uiHidden, setUiHidden] = useState(false);
+  const [cityReady, setCityReady] = useState(true);
+  const [selectedCityNode, setSelectedCityNode] = useState<{
+    id: string;
+    lineCount: number;
+    imports: string[];
+    usedBy: string[];
+  } | null>(null);
+  const [cityFocusTarget, setCityFocusTarget] = useState<{
+    point: [number, number, number];
+    normal: [number, number, number];
+  } | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
   const isCustomizing = pendingProjectId !== null && customPlanets.length > 0;
   const [repos, setRepos] = useState<any[]>([]);
   const [fetchingRepos, setFetchingRepos] = useState(false);
   const [showRepos, setShowRepos] = useState(false);
   const wheelLockRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const cityReadyTimerRef = useRef<number | null>(null);
+  const confirmAtRef = useRef<number | null>(null);
 
   const router = useRouter();
   useEffect(() => {
@@ -545,6 +621,7 @@ export default function LandingPage() {
       }
       const projectId = data.data.project.id as string;
       setPendingProjectId(projectId);
+      setPendingJobId(data.data.project.latestJob?.id ?? null);
       const presets = buildPreviewPlanets();
       setCustomPlanets(presets);
       setFocusedPlanet(presets[0] ?? null);
@@ -552,6 +629,14 @@ export default function LandingPage() {
       setPlacementMode(false);
       setPlacement(null);
       setCityBuilt(false);
+      setCityReady(true);
+      confirmAtRef.current = null;
+      if (cityReadyTimerRef.current) {
+        window.clearTimeout(cityReadyTimerRef.current);
+        cityReadyTimerRef.current = null;
+      }
+      setCityGraphData(null);
+      setLandingProject(null);
     } catch {
       alert("Failed to create project");
     } finally {
@@ -598,6 +683,7 @@ export default function LandingPage() {
   const completeTerraform = useCallback(async () => {
     if (!focusedPlanet || !pendingProjectId || !placement) return;
     setTerraforming(true);
+    setCityBuilt(true);
     try {
       const res = await fetch("/api/v1/planets", {
         method: "POST",
@@ -618,14 +704,76 @@ export default function LandingPage() {
         alert(data.error?.message || "Failed to terraform planet");
         return;
       }
-      setCityBuilt(true);
       setShipTestMode(false);
+      setPlacementMode(false);
+      setCityTheme((prev) => prev);
     } catch {
       alert("Failed to terraform planet");
     } finally {
       setTerraforming(false);
     }
   }, [focusedPlanet, pendingProjectId, placement, router]);
+
+  useEffect(() => {
+    const theme = landingProject?.currentConfig?.theme as ThemeType | undefined;
+    if (theme) setCityTheme(theme);
+  }, [landingProject]);
+
+  const displayGraphData = useMemo(() => {
+    if (!cityGraphData || !cityReady) return null;
+    if (historyIndex === -1 || !cityGraphData.history || cityGraphData.history.length === 0) {
+      return cityGraphData;
+    }
+    const target = cityGraphData.history[historyIndex];
+    const snapshots = cityGraphData.snapshots || [];
+    const snapshot = snapshots.find((s: any) => s.hash === (target as any).hash);
+    if (snapshot?.files) {
+      return { ...cityGraphData, ...buildGraphFromFiles(snapshot.files) };
+    }
+    if (snapshots.length === cityGraphData.history.length && snapshots[historyIndex]?.files) {
+      return { ...cityGraphData, ...buildGraphFromFiles(snapshots[historyIndex].files) };
+    }
+    if ((target as any)?.files) {
+      return { ...cityGraphData, ...buildGraphFromFiles((target as any).files) };
+    }
+    return cityGraphData;
+  }, [cityGraphData, historyIndex]);
+
+  const handleCityNodeSelect = useCallback(
+    (nodeId: string, position: { x: number; y: number; z: number }, normal: { x: number; y: number; z: number }) => {
+      if (!displayGraphData) return;
+      const node = displayGraphData.nodes.find((n: any) => n.id === nodeId);
+      const edges = displayGraphData.edges || (displayGraphData as any).links || [];
+      const imports: string[] = [];
+      const usedBy: string[] = [];
+      edges.forEach((edge: any) => {
+        const sId = typeof edge.source === "object" ? edge.source.id : edge.source;
+        const tId = typeof edge.target === "object" ? edge.target.id : edge.target;
+        if (sId === nodeId) imports.push(tId);
+        if (tId === nodeId) usedBy.push(sId);
+      });
+      setSelectedCityNode({
+        id: nodeId,
+        lineCount: (node as any)?.lines ?? (node as any)?.lineCount ?? (node as any)?.loc ?? 0,
+        imports,
+        usedBy,
+      });
+      setCityFocusTarget({
+        point: [position.x, position.y, position.z],
+        normal: [normal.x, normal.y, normal.z],
+      });
+    },
+    [displayGraphData]
+  );
+
+  useEffect(() => {
+    if (!displayGraphData || !selectedCityNode) return;
+    const exists = displayGraphData.nodes.some((n: any) => n.id === selectedCityNode.id);
+    if (!exists) {
+      setSelectedCityNode(null);
+      setCityFocusTarget(null);
+    }
+  }, [displayGraphData, selectedCityNode]);
 
   const handleTerraform = () => {
     if (!focusedPlanet || !pendingProjectId) return;
@@ -635,6 +783,11 @@ export default function LandingPage() {
     }
     if (!placement) return;
     if (shipLandingActive || terraforming) return;
+    setCityReady(true);
+    if (cityReadyTimerRef.current) {
+      window.clearTimeout(cityReadyTimerRef.current);
+    }
+    confirmAtRef.current = Date.now();
     setShipLandingActive(true);
     setShipLandingKey((prev) => prev + 1);
   };
@@ -653,13 +806,68 @@ export default function LandingPage() {
   const handleExitCustomizing = () => {
     setCustomPlanets([]);
     setPendingProjectId(null);
+    setPendingJobId(null);
     setPlacementMode(false);
     setPlacement(null);
     setShipLandingActive(false);
     setShipTestMode(false);
     setCityBuilt(false);
+    setCityReady(true);
+    confirmAtRef.current = null;
+    if (cityReadyTimerRef.current) {
+      window.clearTimeout(cityReadyTimerRef.current);
+      cityReadyTimerRef.current = null;
+    }
+    setCityGraphData(null);
     setViewMode("main");
   };
+
+  useEffect(() => {
+    if (!pendingProjectId || !pendingJobId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const fetchGraph = async () => {
+      try {
+        const projectRes = await apiFetch<ProjectDetailResponse>(`/api/v1/projects/${pendingProjectId}`);
+        const project = projectRes?.data?.project ?? null;
+        if (!cancelled) setLandingProject(project);
+        const job = project?.latestJob;
+        if (!job || job.status !== "done") {
+          timer = setTimeout(fetchGraph, 2000);
+          return;
+        }
+        const urlRes = await apiFetch<ResultUrlResponse>(`/api/v1/analysis-jobs/${job.id}/result-url`);
+        const graphRes = await fetch(urlRes.data.url);
+        if (!graphRes.ok) throw new Error("Failed to fetch graph data");
+        const data: GraphData = await graphRes.json();
+        const normalized = normalizeGraphData(data);
+        if (!cancelled) setCityGraphData(normalized);
+      } catch {
+        if (!cancelled) timer = setTimeout(fetchGraph, 3000);
+      }
+    };
+
+    fetchGraph();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [pendingProjectId, pendingJobId]);
+
+  useEffect(() => {
+    return () => {
+      if (cityReadyTimerRef.current) {
+        window.clearTimeout(cityReadyTimerRef.current);
+        cityReadyTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!cityGraphData) return;
+    setCityReady(true);
+  }, [cityGraphData]);
 
   return (
     <main className="relative min-h-[200vh] overflow-hidden text-white">
@@ -689,6 +897,12 @@ export default function LandingPage() {
           shipTestMode={shipTestMode}
           shipLandingKey={shipLandingKey}
           cityBuilt={cityBuilt}
+          cityGraphData={displayGraphData}
+          cityTheme={cityTheme}
+          enableOrbit={cityBuilt && !publishOpen}
+          selectedNodeId={selectedCityNode?.id ?? null}
+          onCityNodeSelect={handleCityNodeSelect}
+          cityFocusTarget={cityFocusTarget}
         />
       </div>
 
@@ -857,6 +1071,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {!cityBuilt && (
       <div
         className="pointer-events-auto fixed bottom-16 right-10 z-[60] w-[320px] rounded-none border border-white/15 bg-white/5 p-4 text-sm text-white/85 backdrop-blur-[2px] transition-[transform,opacity] duration-[2400ms] ease-in-out"
         style={{
@@ -930,6 +1145,146 @@ export default function LandingPage() {
           </div>
         )}
       </div>
+      )}
+
+      {cityBuilt && (
+        <>
+          <div className="pointer-events-auto fixed inset-x-0 top-0 z-[70] translate-y-0 border-b border-white/10 bg-black/50 px-6 py-4 backdrop-blur-md transition-transform duration-[1200ms]">
+            <div className="mx-auto flex max-w-[1600px] items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Link href="/" className="flex items-center gap-3">
+                  <div className="relative h-8 w-8 rounded-none border border-white/20 bg-white/10">
+                    <div className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan-300" />
+                  </div>
+                  <span className="text-sm font-semibold tracking-[0.18em] text-white">CODEVIZ</span>
+                </Link>
+                <span className="text-white/20">/</span>
+                <div className="text-sm font-medium text-white/90">
+                  {landingProject?.title ?? "Terraforming Project"}
+                </div>
+                {landingProject?.latestJob?.status && (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/70">
+                    Job: {landingProject.latestJob.status}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => router.push("/feed")}
+                  className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs text-white/80"
+                >
+                  Explore
+                </button>
+                <button
+                  onClick={() => {
+                    setUiHidden(true);
+                    setPublishOpen(true);
+                  }}
+                  disabled={!landingProject || landingProject.latestJob?.status !== "done"}
+                  className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs text-white/80 disabled:text-white/40 disabled:cursor-not-allowed"
+                >
+                  Publish
+                </button>
+                <button
+                  onClick={() => setUiHidden((prev) => !prev)}
+                  className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs text-white/80"
+                >
+                  {uiHidden ? "Show UI" : "Hide UI"}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[70] border-t border-white/10 bg-black/40 px-6 py-3 backdrop-blur-md transition-transform duration-[1200ms]">
+            <div className="mx-auto flex max-w-[1600px] items-center justify-between text-xs text-white/70">
+              <span>3D City View · Drag to orbit · Scroll to zoom</span>
+              <span>Theme: {cityTheme}</span>
+            </div>
+          </div>
+          <div
+            className="pointer-events-auto fixed right-0 top-[68px] z-[70] h-[calc(100vh-68px)] w-[360px] transition-transform duration-[1200ms] ease-in-out"
+            style={{
+              transform: uiHidden ? "translateX(110%)" : "translateX(0)",
+              pointerEvents: uiHidden ? "none" : "auto",
+            }}
+          >
+            <ControlsPanel
+              project={landingProject}
+              theme={cityTheme}
+              onThemeChange={setCityTheme}
+              selectedNode={selectedCityNode}
+            />
+          </div>
+          {displayGraphData?.history && displayGraphData.history.length > 0 && (
+            <div
+              className="pointer-events-auto fixed bottom-24 left-1/2 z-[70] w-[520px] -translate-x-1/2 border border-white/10 bg-black/40 px-4 py-3 backdrop-blur-md transition-transform duration-[1200ms] ease-in-out"
+              style={{
+                transform: `translate(-50%, ${uiHidden ? "160%" : "0"})`,
+                opacity: uiHidden ? 0 : 1,
+                pointerEvents: uiHidden ? "none" : "auto",
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onPointerMove={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
+            >
+              <div className="mb-2 flex items-center justify-between text-xs text-white/70">
+                <span>
+                  {historyIndex === -1
+                    ? "Latest"
+                    : (() => {
+                        const entry = displayGraphData.history[historyIndex] as any;
+                        if (entry?.timestamp) {
+                          return new Date(entry.timestamp * 1000).toLocaleDateString();
+                        }
+                        if (entry?.date) {
+                          return new Date(entry.date).toLocaleDateString();
+                        }
+                        return "Snapshot";
+                      })()}
+                </span>
+                <span className="text-white/50">
+                  {historyIndex === -1
+                    ? "Initial layout"
+                    : (() => {
+                        const entry = displayGraphData.history[historyIndex] as any;
+                        return entry?.message || entry?.hash || "Snapshot";
+                      })()}
+                </span>
+              </div>
+              {(() => {
+                const history = displayGraphData.history;
+                const L = history.length;
+                const sliderValue = historyIndex === -1 ? L : (L - 1) - historyIndex;
+                const handleChange = (val: number) => {
+                  setHistoryIndex(val === L ? -1 : (L - 1) - val);
+                };
+                return (
+                  <input
+                    type="range"
+                    min="0"
+                    max={L}
+                    value={sliderValue}
+                    onChange={(e) => handleChange(parseInt(e.target.value, 10))}
+                    onInput={(e) => handleChange(parseInt((e.target as HTMLInputElement).value, 10))}
+                    className="w-full accent-cyan-300"
+                  />
+                );
+              })()}
+            </div>
+          )}
+          {landingProject?.id && (
+            <PublishDialog
+              open={publishOpen}
+              onOpenChange={setPublishOpen}
+              projectId={landingProject.id}
+              repoUrl={landingProject.repoUrl}
+              currentConfig={{ ...(landingProject.currentConfig || {}), theme: cityTheme }}
+              latestJobId={landingProject.latestJob?.id ?? null}
+              captureScreenshot={null}
+            />
+          )}
+        </>
+      )}
 
       <section className="h-[100vh]" />
     </main>

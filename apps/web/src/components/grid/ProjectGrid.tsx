@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { ProjectCard as ProjectCardT } from "@/lib/types";
 import { ProjectCard } from "@/components/cards/ProjectCard";
 
@@ -20,9 +19,13 @@ export function ProjectGrid({ items }: Props) {
   return (
     <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {items.map((p) => (
-        <Link key={p.id} href={`/p/${p.id}`}>
-          <ProjectCard item={p} />
-        </Link>
+        <ProjectCard
+          key={p.id}
+          project={p}
+          onDelete={() => {
+            // no-op for grid view
+          }}
+        />
       ))}
     </div>
   );

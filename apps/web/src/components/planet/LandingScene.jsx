@@ -1,7 +1,7 @@
 "use client";
 
 import * as THREE from "three";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import VoxelPlanet from "./VoxelPlanet.jsx";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
@@ -33,8 +33,8 @@ function makeRadialTexture(stops, size = 256) {
   return t;
 }
 
-function Sun({ sunPosRef, sunPos = [-30, 22, -18], distance = 90, size = 14, haloSize = 34, intensity = 3.6 }) {
-  const lightRef = useRef();
+function Sun({ sunPosRef, sunPos = [-30, 22, -18], distance = 90, size = 14, haloSize = 34, intensity = 4.4, lightRef }) {
+  const lightRefLocal = useRef();
   const spriteRef = useRef();
 
   const coreTex = useMemo(
@@ -61,7 +61,8 @@ function Sun({ sunPosRef, sunPos = [-30, 22, -18], distance = 90, size = 14, hal
 
   useFrame(() => {
     const pos = sunPosRef?.current ? new THREE.Vector3(...sunPosRef.current) : new THREE.Vector3(...sunPos);
-    if (lightRef.current) lightRef.current.position.copy(pos);
+    const targetLight = lightRef?.current ?? lightRefLocal.current;
+    if (targetLight) targetLight.position.copy(pos);
     const spritePos = pos.clone().normalize().multiplyScalar(distance);
     if (spriteRef.current) spriteRef.current.position.copy(spritePos);
   });
@@ -70,7 +71,7 @@ function Sun({ sunPosRef, sunPos = [-30, 22, -18], distance = 90, size = 14, hal
     <>
       <directionalLight
         position={sunPos}
-        ref={lightRef}
+        ref={lightRefLocal}
         intensity={intensity}
         castShadow
         shadow-mapSize-width={2048}
@@ -183,7 +184,7 @@ function NebulaBackdrop({ radius = 95, sunDir = [0.8, 0.3, 0.45] }) {
   );
 }
 
-function CameraRig({ mode, targets }) {
+function CameraRig({ mode, targets, enabled = true }) {
   const { camera } = useThree();
   const targetRef = useRef(new THREE.Vector3(...targets.main.target));
   const desiredPos = useRef(new THREE.Vector3());
@@ -202,6 +203,7 @@ function CameraRig({ mode, targets }) {
   });
 
   useFrame((_, dt) => {
+    if (!enabled) return;
     const conf = targets[mode] || targets.main;
     desiredPos.current.set(...conf.position);
     desiredTarget.current.set(...conf.target);
@@ -259,15 +261,249 @@ function CameraRig({ mode, targets }) {
   return null;
 }
 
-function SunRig({ mode, base, sunPosRef, angleRef }) {
+function OrbitDragControls({ enabled, targetRef, onInteract }) {
+  const { camera, gl } = useThree();
+  const dragRef = useRef({
+    active: false,
+    mode: "rotate",
+    lastX: 0,
+    lastY: 0,
+    theta: 0,
+    phi: 0,
+    radius: 8,
+  });
+  const targetOffsetRef = useRef(new THREE.Vector3());
+
+  useEffect(() => {
+    if (!enabled) return;
+    const updateFromCamera = () => {
+      const target = targetRef.current || new THREE.Object3D();
+      const targetPos = new THREE.Vector3();
+      target.getWorldPosition(targetPos);
+      targetPos.add(targetOffsetRef.current);
+      const offset = camera.position.clone().sub(targetPos);
+      dragRef.current.radius = offset.length();
+      dragRef.current.theta = Math.atan2(offset.x, offset.z);
+      dragRef.current.phi = Math.acos(THREE.MathUtils.clamp(offset.y / dragRef.current.radius, -1, 1));
+    };
+    updateFromCamera();
+
+    const dom = gl.domElement;
+    const isInside = (e) => dom && dom.contains(e.target);
+    const onPointerDown = (e) => {
+      if (!isInside(e)) return;
+      if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
+      e.preventDefault();
+      onInteract?.();
+      dragRef.current.active = true;
+      dragRef.current.mode = e.button === 0 ? "rotate" : "pan";
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
+    };
+    const onPointerMove = (e) => {
+      if (!dragRef.current.active) return;
+      const dx = e.clientX - dragRef.current.lastX;
+      const dy = e.clientY - dragRef.current.lastY;
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
+
+      const target = targetRef.current || new THREE.Object3D();
+      const targetPos = new THREE.Vector3();
+      target.getWorldPosition(targetPos);
+
+      if (dragRef.current.mode === "pan") {
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+        const panScale = dragRef.current.radius * 0.002;
+        targetOffsetRef.current.addScaledVector(right, -dx * panScale);
+        targetOffsetRef.current.addScaledVector(up, dy * panScale);
+      } else {
+        dragRef.current.theta -= dx * 0.005;
+        dragRef.current.phi = THREE.MathUtils.clamp(
+          dragRef.current.phi + dy * 0.004,
+          0.25,
+          Math.PI - 0.25
+        );
+      }
+
+      targetPos.add(targetOffsetRef.current);
+
+      const r = dragRef.current.radius;
+      const sinPhi = Math.sin(dragRef.current.phi);
+      const pos = new THREE.Vector3(
+        r * sinPhi * Math.sin(dragRef.current.theta),
+        r * Math.cos(dragRef.current.phi),
+        r * sinPhi * Math.cos(dragRef.current.theta)
+      ).add(targetPos);
+      camera.position.copy(pos);
+      camera.lookAt(targetPos);
+    };
+    const onPointerUp = () => {
+      dragRef.current.active = false;
+    };
+    const onContextMenu = (e) => {
+      e.preventDefault();
+    };
+    const onWheel = (e) => {
+      if (!isInside(e)) return;
+      e.preventDefault();
+      onInteract?.();
+      dragRef.current.radius = THREE.MathUtils.clamp(
+        dragRef.current.radius + e.deltaY * 0.002,
+        2.5,
+        40
+      );
+      const target = targetRef.current || new THREE.Object3D();
+      const targetPos = new THREE.Vector3();
+      target.getWorldPosition(targetPos);
+      targetPos.add(targetOffsetRef.current);
+      const r = dragRef.current.radius;
+      const sinPhi = Math.sin(dragRef.current.phi);
+      const pos = new THREE.Vector3(
+        r * sinPhi * Math.sin(dragRef.current.theta),
+        r * Math.cos(dragRef.current.phi),
+        r * sinPhi * Math.cos(dragRef.current.theta)
+      ).add(targetPos);
+      camera.position.copy(pos);
+      camera.lookAt(targetPos);
+    };
+
+    dom.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    dom.addEventListener("wheel", onWheel, { passive: false });
+    dom.addEventListener("contextmenu", onContextMenu);
+    return () => {
+      dom.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      dom.removeEventListener("wheel", onWheel);
+      dom.removeEventListener("contextmenu", onContextMenu);
+    };
+  }, [enabled, camera, targetRef, onInteract, gl]);
+
+  return null;
+}
+
+function SunRig({ mode, base, sunPosRef, angleRef, lightRef = null, orbit = false }) {
   useFrame((_, dt) => {
-    const targetAngle = mode === "carousel" ? Math.PI * 0.25 : 0;
-    const t = 1 - Math.exp(-1 * dt);
-    angleRef.current += (targetAngle - angleRef.current) * t;
+    if (orbit) {
+      angleRef.current += dt * 0.06;
+    } else {
+      const targetAngle = mode === "carousel" ? Math.PI * 0.25 : 0;
+      const t = 1 - Math.exp(-1 * dt);
+      angleRef.current += (targetAngle - angleRef.current) * t;
+    }
     const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angleRef.current);
     const pos = base.clone().applyQuaternion(rot).toArray();
     sunPosRef.current = pos;
+    if (lightRef?.current) {
+      lightRef.current.position.set(pos[0], pos[1], pos[2]);
+    }
   });
+  return null;
+}
+
+function LandingCameraCue({ active, placement, planetRef, lockRef, override = false }) {
+  const { camera } = useThree();
+  const animRef = useRef({
+    t: 0,
+    from: new THREE.Vector3(),
+    to: new THREE.Vector3(),
+    fromFov: 34,
+    toFov: 42,
+    target: new THREE.Vector3(),
+  });
+  const delayRef = useRef(0);
+  const startedRef = useRef(false);
+
+  useEffect(() => {
+    if (!active || !placement?.point) return;
+    if (lockRef && !lockRef.current?.position) return;
+    const worldPoint = new THREE.Vector3(...placement.point);
+    const center = new THREE.Vector3();
+    if (planetRef?.current) {
+      planetRef.current.getWorldPosition(center);
+    }
+    const outward = worldPoint.clone().sub(center);
+    let normal = outward.lengthSq() > 1e-6 ? outward.normalize() : new THREE.Vector3(...placement.normal).normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    const tangent = up.clone().projectOnPlane(normal);
+    if (tangent.lengthSq() < 1e-6) tangent.set(1, 0, 0);
+    tangent.normalize();
+    const dist = PLANET_RADIUS + 1.9;
+    const targetPos = center
+      .clone()
+      .add(normal.clone().multiplyScalar(dist))
+      .add(tangent.clone().multiplyScalar(1.6))
+      .add(up.clone().multiplyScalar(-1.35));
+    animRef.current.t = 0;
+    if (lockRef?.current?.position) {
+      animRef.current.from.copy(lockRef.current.position);
+    } else {
+      animRef.current.from.copy(camera.position);
+    }
+    animRef.current.to.copy(targetPos);
+    animRef.current.fromFov = camera.fov;
+    animRef.current.toFov = camera.fov + 8;
+    animRef.current.target.copy(worldPoint);
+    delayRef.current = performance.now() + 2000;
+    startedRef.current = false;
+  }, [active, placement, camera, planetRef, lockRef]);
+
+  useFrame((_, dt) => {
+    if (!active || !placement?.point) return;
+    if (performance.now() < delayRef.current) {
+      if (!override && lockRef?.current?.position) {
+        camera.position.copy(lockRef.current.position);
+      }
+      if (!override) {
+        camera.lookAt(animRef.current.target);
+      }
+      return;
+    }
+    if (!startedRef.current) {
+      animRef.current.t = 0;
+      startedRef.current = true;
+    }
+    animRef.current.t = Math.min(1, animRef.current.t + dt * 0.175);
+    const t = animRef.current.t;
+    const eased = t * t * (3 - 2 * t);
+    camera.position.lerpVectors(animRef.current.from, animRef.current.to, eased);
+    camera.fov = THREE.MathUtils.lerp(animRef.current.fromFov, animRef.current.toFov, eased);
+    camera.updateProjectionMatrix();
+    camera.lookAt(animRef.current.target);
+  });
+
+  return null;
+}
+
+function StarsOrbit({ active, groupRef }) {
+  useFrame((_, dt) => {
+    if (!active || !groupRef.current) return;
+    groupRef.current.rotation.y += dt * 0.05;
+  });
+  return null;
+}
+
+function LandingCameraLock({ active, lockRef, landingKey, onReady }) {
+  const { camera } = useThree();
+  useLayoutEffect(() => {
+    if (!active) return;
+    if (lockRef.current?.key === landingKey) return;
+    camera.updateMatrixWorld();
+    const position = new THREE.Vector3();
+    camera.getWorldPosition(position);
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    lockRef.current = {
+      key: landingKey,
+      position,
+      forward,
+      up: camera.up.clone(),
+    };
+    onReady?.();
+  }, [active, landingKey, camera, lockRef, onReady]);
   return null;
 }
 
@@ -304,6 +540,10 @@ function PlanetNode({
   shipLandingKey,
   registerActiveRef,
   cityBuilt,
+  cityGraphData,
+  cityTheme = "Thema1",
+  selectedNodeId,
+  onCityNodeSelect,
 }) {
   const params = resolvePlanetParams(planet);
   const palette = planet?.palette || {};
@@ -329,7 +569,7 @@ function PlanetNode({
     }
     const point = new THREE.Vector3(...placement.point);
     const localDir = point.clone().normalize();
-    const targetDir = new THREE.Vector3(0, 0.28, 1).normalize();
+    const targetDir = new THREE.Vector3(0, 0.2, 1).normalize();
     targetQuat.current.setFromUnitVectors(localDir, targetDir);
     hasTarget.current = true;
   }, [placementMode, placement, focusId, planet, position]);
@@ -386,7 +626,7 @@ function PlanetNode({
         palette={palette}
         cloudColor={cloudColor}
         sunDir={[-30, 22, -18]}
-        rotatePeriodSec={placementMode ? 0 : 80}
+        rotatePeriodSec={placementMode || cityBuilt ? 0 : 80}
         cloudSpeedFactor={0.4}
         onPick={(point, normal) => {
           if (!onPick) return;
@@ -400,11 +640,20 @@ function PlanetNode({
           onPick(localPoint, localNormal);
         }}
       />
-      {placementMode && placement && focusId === planet?.id && (
+      {!cityBuilt && placementMode && placement && focusId === planet?.id && (
         <PlacementMarker placement={placement} />
       )}
-      {cityBuilt && placement && focusId === planet?.id && (
-        <CityMarker placement={placement} />
+      {placement && focusId === planet?.id && cityGraphData && (
+        <CityCluster
+          placement={placement}
+          graphData={cityGraphData}
+          theme={cityTheme}
+          selectedNodeId={selectedNodeId}
+          onNodeSelect={onCityNodeSelect}
+        />
+      )}
+      {cityBuilt && !cityGraphData && placement && focusId === planet?.id && (
+        <LandingCharacters placement={placement} />
       )}
     </group>
   );
@@ -504,6 +753,441 @@ function CityMarker({ placement }) {
   );
 }
 
+const CITY_THEME_CONFIG = {
+  Thema1: { lastBuilding: "n" },
+  Thema2: { lastBuilding: "t" },
+  Thema3: { lastBuilding: "p" },
+};
+
+const CITY_OBJ_CACHE = new Map();
+const CHARACTER_CACHE = new Map();
+
+function loadCityModel(url, objLoader, mtlLoader) {
+  if (CITY_OBJ_CACHE.has(url)) {
+    return Promise.resolve(CITY_OBJ_CACHE.get(url).clone());
+  }
+  return new Promise((resolve, reject) => {
+    const baseUrl = url.substring(0, url.lastIndexOf("/") + 1);
+    const objFile = url.split("/").pop();
+    const mtlFile = url.replace(".obj", ".mtl").split("/").pop();
+    mtlLoader.setPath(baseUrl).load(
+      mtlFile,
+      (mtl) => {
+        mtl.preload();
+        objLoader.setMaterials(mtl);
+        objLoader.setPath(baseUrl).load(
+          objFile,
+          (obj) => {
+            CITY_OBJ_CACHE.set(url, obj);
+            resolve(obj.clone());
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      () => {
+        objLoader.setMaterials(null);
+        objLoader.setPath(baseUrl).load(
+          objFile,
+          (obj) => {
+            obj.traverse((c) => {
+              if (c.isMesh) {
+                c.material = new THREE.MeshStandardMaterial({ color: "#d9e8ff" });
+              }
+            });
+            CITY_OBJ_CACHE.set(url, obj);
+            resolve(obj.clone());
+          },
+          undefined,
+          reject
+        );
+      }
+    );
+  });
+}
+
+function loadCharacterObj(url) {
+  if (CHARACTER_CACHE.has(url)) {
+    return Promise.resolve(CHARACTER_CACHE.get(url).clone());
+  }
+  const objLoader = new OBJLoader();
+  const mtlLoader = new MTLLoader();
+  return new Promise((resolve, reject) => {
+    const baseUrl = url.substring(0, url.lastIndexOf("/") + 1);
+    const objFile = url.split("/").pop();
+    const mtlFile = url.replace(".obj", ".mtl").split("/").pop();
+    mtlLoader.setPath(baseUrl).load(
+      mtlFile,
+      (mtl) => {
+        mtl.preload();
+        objLoader.setMaterials(mtl);
+        objLoader.setPath(baseUrl).load(
+          objFile,
+          (obj) => {
+            CHARACTER_CACHE.set(url, obj);
+            resolve(obj.clone());
+          },
+          undefined,
+          reject
+        );
+      },
+      undefined,
+      () => {
+        objLoader.setMaterials(null);
+        objLoader.setPath(baseUrl).load(
+          objFile,
+          (obj) => {
+            obj.traverse((c) => {
+              if (c.isMesh) {
+                c.material = new THREE.MeshStandardMaterial({ color: "#f4f7ff" });
+              }
+            });
+            CHARACTER_CACHE.set(url, obj);
+            resolve(obj.clone());
+          },
+          undefined,
+          reject
+        );
+      }
+    );
+  });
+}
+
+function LandingCharacters({ placement, count = 4 }) {
+  const groupRef = useRef(null);
+  const [model, setModel] = useState(null);
+  const startTimeRef = useRef(null);
+  const normal = useMemo(() => {
+    if (!placement?.normal) return null;
+    return new THREE.Vector3(...placement.normal).normalize();
+  }, [placement]);
+  const walkers = useMemo(
+    () =>
+      Array.from({ length: count }).map((_, idx) => {
+        const delay = idx * 0.55;
+        const angle = (Math.random() * 0.8 - 0.4) * Math.PI;
+        const speed = 0.08 + Math.random() * 0.04;
+        const maxDist = 0.6 + Math.random() * 0.4;
+        return { delay, angle, speed, maxDist };
+      }),
+    [count]
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    loadCharacterObj("/Themas/Thema1/character-oobi.obj")
+      .then((obj) => {
+        if (!mounted) return;
+        const box = new THREE.Box3().setFromObject(obj);
+        const size = box.getSize(new THREE.Vector3());
+        const scale = 0.08 / Math.max(size.x, size.y, size.z);
+        obj.scale.setScalar(scale);
+        setModel(obj);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useFrame((state) => {
+    if (!groupRef.current || !normal) return;
+    const time = state.clock.getElapsedTime();
+    if (startTimeRef.current === null) {
+      startTimeRef.current = time;
+    }
+    const baseTime = startTimeRef.current ?? time;
+    const tangent1 = new THREE.Vector3(1, 0, 0).projectOnPlane(normal).normalize();
+    const tangent2 = new THREE.Vector3().crossVectors(normal, tangent1).normalize();
+    const baseStart = tangent1.clone().multiplyScalar(0.12).add(tangent2.clone().multiplyScalar(-0.06));
+    groupRef.current.children.forEach((child, idx) => {
+      const walker = walkers[idx];
+      const t = time - baseTime - walker.delay;
+      if (t < 0) {
+        child.visible = false;
+        return;
+      }
+      child.visible = true;
+      const dir = tangent1
+        .clone()
+        .multiplyScalar(Math.cos(walker.angle))
+        .add(tangent2.clone().multiplyScalar(Math.sin(walker.angle)))
+        .normalize();
+      const walkDist = Math.min(walker.maxDist, walker.speed * t);
+      const wobble = Math.sin(t * 0.8) * 0.03;
+      const offset = baseStart
+        .clone()
+        .add(dir.clone().multiplyScalar(walkDist))
+        .add(tangent2.clone().multiplyScalar(wobble));
+      child.position.copy(offset);
+      child.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+      child.lookAt(offset.clone().add(dir));
+    });
+  });
+
+  if (!model || !normal || !placement?.point) return null;
+
+  const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  return (
+    <group position={placement.point} quaternion={rotation} ref={groupRef}>
+      {Array.from({ length: count }).map((_, idx) => (
+        <primitive key={idx} object={model.clone()} />
+      ))}
+    </group>
+  );
+}
+
+function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect }) {
+  const groupRef = useRef(null);
+  const objLoaderRef = useRef(new OBJLoader());
+  const mtlLoaderRef = useRef(new MTLLoader());
+  const nodes = graphData?.nodes || [];
+  const edges = graphData?.edges || graphData?.links || [];
+  const edgeGroupRef = useRef(null);
+  const ringRef = useRef(null);
+  const nodePosRef = useRef(new Map());
+  const nodeNormalRef = useRef(new Map());
+  const { camera, gl } = useThree();
+
+  useEffect(() => {
+    if (!groupRef.current || !placement?.point || !nodes.length) return;
+    groupRef.current.clear();
+    const config = CITY_THEME_CONFIG[theme] || CITY_THEME_CONFIG.Thema1;
+    const startCode = "a".charCodeAt(0);
+    const endCode = config.lastBuilding.charCodeAt(0);
+    const buildings = [];
+    for (let i = startCode; i <= endCode; i++) {
+      buildings.push(`/Themas/${theme}/building-${String.fromCharCode(i)}.obj`);
+    }
+
+    const normal = new THREE.Vector3(...placement.normal).normalize();
+    const base = new THREE.Vector3(...placement.point).normalize().multiplyScalar(PLANET_RADIUS + 0.02);
+    const tangent1 = new THREE.Vector3(1, 0, 0).projectOnPlane(normal).normalize();
+    const tangent2 = new THREE.Vector3().crossVectors(normal, tangent1).normalize();
+    const limit = Math.min(nodes.length, 140);
+    const pos2 = Array.from({ length: limit }, () => new THREE.Vector2());
+    const vel2 = Array.from({ length: limit }, () => new THREE.Vector2());
+    const nodeIndex = new Map();
+
+    for (let i = 0; i < limit; i++) {
+      const node = nodes[i];
+      nodeIndex.set(node.id, i);
+      const angle = i * 0.6;
+      const radius = 0.12 * Math.sqrt(i);
+      pos2[i].set(Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+
+    const repel = 0.008;
+    const spring = 0.32;
+    const linkDist = 0.14;
+    const damping = 0.82;
+    const iterations = 80;
+    const dt = 0.035;
+
+    for (let step = 0; step < iterations; step += 1) {
+      for (let i = 0; i < limit; i++) {
+        for (let j = i + 1; j < limit; j++) {
+          const dx = pos2[i].x - pos2[j].x;
+          const dy = pos2[i].y - pos2[j].y;
+          const distSq = dx * dx + dy * dy + 0.001;
+          const force = repel / distSq;
+          const invDist = 1 / Math.sqrt(distSq);
+          const fx = dx * invDist * force;
+          const fy = dy * invDist * force;
+          vel2[i].x += fx;
+          vel2[i].y += fy;
+          vel2[j].x -= fx;
+          vel2[j].y -= fy;
+        }
+      }
+      edges.forEach((edge) => {
+        const sId = typeof edge.source === "object" ? edge.source.id : edge.source;
+        const tId = typeof edge.target === "object" ? edge.target.id : edge.target;
+        const si = nodeIndex.get(sId);
+        const ti = nodeIndex.get(tId);
+        if (si == null || ti == null) return;
+        const dx = pos2[ti].x - pos2[si].x;
+        const dy = pos2[ti].y - pos2[si].y;
+        const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
+        const force = (dist - linkDist) * spring;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        vel2[si].x += fx;
+        vel2[si].y += fy;
+        vel2[ti].x -= fx;
+        vel2[ti].y -= fy;
+      });
+      for (let i = 0; i < limit; i++) {
+        pos2[i].x += vel2[i].x * dt;
+        pos2[i].y += vel2[i].y * dt;
+        vel2[i].multiplyScalar(damping);
+      }
+    }
+
+    const surfacePositions = new Array(limit);
+    for (let i = 0; i < limit; i++) {
+      const offset = tangent1.clone().multiplyScalar(pos2[i].x).add(tangent2.clone().multiplyScalar(pos2[i].y));
+      const position = base.clone().add(offset).normalize().multiplyScalar(PLANET_RADIUS + 0.02);
+      surfacePositions[i] = position;
+    }
+
+    nodePosRef.current.clear();
+    nodeNormalRef.current.clear();
+    edgeGroupRef.current = new THREE.Group();
+
+    if (edges.length && edgeGroupRef.current) {
+      const tubeRadius = PLANET_RADIUS * 0.0016;
+      edges.forEach((edge) => {
+        const sId = typeof edge.source === "object" ? edge.source.id : edge.source;
+        const tId = typeof edge.target === "object" ? edge.target.id : edge.target;
+        const si = nodeIndex.get(sId);
+        const ti = nodeIndex.get(tId);
+        if (si == null || ti == null) return;
+        const sPos = surfacePositions[si];
+        const tPos = surfacePositions[ti];
+        const mid = sPos.clone().add(tPos).multiplyScalar(0.5);
+        const ctrl = mid.clone().normalize().multiplyScalar(PLANET_RADIUS + 0.05);
+        const curve = new THREE.QuadraticBezierCurve3(sPos, ctrl, tPos);
+        const geometry = new THREE.TubeGeometry(curve, 6, tubeRadius, 6, false);
+        const material = new THREE.MeshBasicMaterial({ color: "#2f3338", transparent: true, opacity: 0.75 });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.userData = { isRoad: true, sourceId: sId, targetId: tId };
+        edgeGroupRef.current.add(mesh);
+      });
+      groupRef.current.add(edgeGroupRef.current);
+    }
+
+    for (let i = 0; i < limit; i++) {
+      const node = nodes[i];
+      const height = Math.max(
+        PLANET_RADIUS * 0.008,
+        Math.log((node.lines || node.loc || 10) + 1) * PLANET_RADIUS * 0.004
+      );
+      const url = buildings[i % buildings.length];
+      const surfacePos = surfacePositions[i];
+      const nodeNormal = surfacePos.clone().normalize();
+      nodePosRef.current.set(node.id, surfacePos.clone());
+      nodeNormalRef.current.set(node.id, nodeNormal.clone());
+      loadCityModel(url, objLoaderRef.current, mtlLoaderRef.current)
+        .then((obj) => {
+          obj.rotation.x = -Math.PI / 2;
+          obj.rotation.z = Math.PI;
+          obj.scale.setScalar(height);
+          const box = new THREE.Box3().setFromObject(obj);
+          const minY = box.min.y;
+          obj.position.z = minY;
+          obj.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+          const wrapper = new THREE.Group();
+          wrapper.position.copy(surfacePos);
+          wrapper.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), nodeNormal);
+          wrapper.userData.nodeId = node.id;
+          wrapper.userData.nodePosition = surfacePos.clone();
+          wrapper.userData.nodeNormal = nodeNormal.clone();
+          obj.traverse((child) => {
+            child.userData = {
+              ...child.userData,
+              nodeId: node.id,
+              nodePosition: surfacePos.clone(),
+              nodeNormal: nodeNormal.clone(),
+            };
+          });
+          wrapper.add(obj);
+          groupRef.current?.add(wrapper);
+        })
+        .catch(() => {});
+    }
+    if (!ringRef.current) {
+      const ringGeo = new THREE.RingGeometry(PLANET_RADIUS * 0.02, PLANET_RADIUS * 0.028, 36);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xff1b8c,
+        transparent: true,
+        opacity: 0.8,
+        side: THREE.DoubleSide,
+      });
+      ringRef.current = new THREE.Mesh(ringGeo, ringMat);
+      ringRef.current.visible = false;
+      groupRef.current?.add(ringRef.current);
+    }
+  }, [placement, graphData, theme, nodes, edges]);
+
+  const raycaster = useRef(new THREE.Raycaster());
+  const pointer = useRef(new THREE.Vector2());
+
+  useEffect(() => {
+    if (!gl?.domElement) return;
+    const onPointerDown = (e) => {
+      if (!groupRef.current) return;
+      const rect = gl.domElement.getBoundingClientRect();
+      pointer.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.current.setFromCamera(pointer.current, camera);
+      const hits = raycaster.current.intersectObjects(groupRef.current.children, true);
+      for (const hit of hits) {
+        let obj = hit.object;
+        while (obj && !obj.userData?.nodeId) {
+          obj = obj.parent;
+        }
+        if (obj?.userData?.isRoad) continue;
+        if (obj?.userData?.nodeId) {
+          onNodeSelect?.(obj.userData.nodeId, obj.userData.nodePosition, obj.userData.nodeNormal);
+          break;
+        }
+      }
+    };
+    gl.domElement.addEventListener("pointerdown", onPointerDown);
+    return () => gl.domElement.removeEventListener("pointerdown", onPointerDown);
+  }, [gl, camera, onNodeSelect]);
+
+  useEffect(() => {
+    if (!edgeGroupRef.current) return;
+    edgeGroupRef.current.children.forEach((mesh) => {
+      const { sourceId, targetId } = mesh.userData || {};
+      const mat = mesh.material;
+      if (!mat) return;
+      if (!selectedNodeId) {
+        mat.color.set("#2f3338");
+        mat.opacity = 0.75;
+        return;
+      }
+      if (sourceId === selectedNodeId) {
+        mat.color.set("#00ffff");
+        mat.opacity = 1.0;
+      } else if (targetId === selectedNodeId) {
+        mat.color.set("#ff1b8c");
+        mat.opacity = 1.0;
+      } else {
+        mat.color.set("#2f3338");
+        mat.opacity = 0.45;
+      }
+    });
+  }, [selectedNodeId]);
+
+  useEffect(() => {
+    if (!ringRef.current) return;
+    if (!selectedNodeId) {
+      ringRef.current.visible = false;
+      return;
+    }
+    const pos = nodePosRef.current.get(selectedNodeId);
+    const normal = nodeNormalRef.current.get(selectedNodeId);
+    if (!pos || !normal) {
+      ringRef.current.visible = false;
+      return;
+    }
+    ringRef.current.visible = true;
+    ringRef.current.position.copy(pos);
+    ringRef.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  }, [selectedNodeId]);
+
+  return <group ref={groupRef} />;
+}
+
 const TRAIN_PARTS = [
   { key: "a", obj: "/train/train-electric-city-a.obj", mtl: "/train/train-electric-city-a.mtl" },
   { key: "b", obj: "/train/train-electric-city-b.obj", mtl: "/train/train-electric-city-b.mtl" },
@@ -556,7 +1240,7 @@ function loadTrainPart(part, objLoader, mtlLoader) {
   });
 }
 
-function TrainLanding({ active, placement, onArrive, loop = false, landingKey }) {
+function TrainLanding({ active, placement, onArrive, loop = false, landingKey, cameraLockRef, depart = false }) {
   const { camera } = useThree();
   const [ship, setShip] = useState(null);
   const pathRef = useRef({
@@ -564,8 +1248,18 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey })
     control: new THREE.Vector3(),
     end: new THREE.Vector3(),
   });
+  const departPathRef = useRef({
+    active: false,
+    t: 0,
+    start: new THREE.Vector3(),
+    control: new THREE.Vector3(),
+    end: new THREE.Vector3(),
+  });
   const tRef = useRef(0);
   const doneRef = useRef(false);
+  const landedRef = useRef(false);
+  const landedPosRef = useRef(null);
+  const landedQuatRef = useRef(null);
   const effectRef = useRef(null);
 
   useEffect(() => {
@@ -598,15 +1292,22 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey })
 
   useEffect(() => {
     if (!active || !placement?.point || !ship) return;
+    if (landedRef.current) return;
     tRef.current = 0;
     doneRef.current = false;
-    camera.updateMatrixWorld();
+    landedRef.current = false;
+    landedPosRef.current = null;
+    landedQuatRef.current = null;
+    departPathRef.current.active = false;
+    ship.visible = true;
+    const lock = cameraLockRef?.current;
+    const lockedPos = lock?.position ? lock.position.clone() : camera.position.clone();
+    const lockedForward = lock?.forward ? lock.forward.clone() : new THREE.Vector3(0, 0, -1);
+    const lockedUp = lock?.up ? lock.up.clone() : camera.up.clone();
     const normal = new THREE.Vector3(...placement.normal).normalize();
-    const endWorld = new THREE.Vector3(...placement.point).add(normal.clone().multiplyScalar(0.35));
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
-    const cameraWorld = new THREE.Vector3();
-    camera.getWorldPosition(cameraWorld);
+    const endWorld = new THREE.Vector3(...placement.point).add(normal.clone().multiplyScalar(0.005));
+    const forward = lockedForward.clone();
+    const cameraWorld = lockedPos.clone();
     const startWorld = cameraWorld
       .clone()
       .add(forward.clone().multiplyScalar(-3.2))
@@ -622,53 +1323,116 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey })
     pathRef.current.start.copy(startWorld);
     pathRef.current.control.copy(controlWorld);
     pathRef.current.end.copy(endWorld);
+    pathRef.current.up = lockedUp.clone();
   }, [active, placement, ship, camera, landingKey]);
+
+  useEffect(() => {
+    if (!active || !ship || !placement?.point) return;
+    if (!depart || loop) return;
+    if (!landedRef.current) return;
+    if (departPathRef.current.active) return;
+    const normal = new THREE.Vector3(...placement.normal).normalize();
+    const lock = cameraLockRef?.current;
+    const forward = lock?.forward ? lock.forward.clone() : new THREE.Vector3(0, 0, -1);
+    const start = (landedPosRef.current || ship.position).clone();
+    const end = start.clone().add(normal.clone().multiplyScalar(10)).add(forward.clone().multiplyScalar(8));
+    const control = start.clone().add(normal.clone().multiplyScalar(4.8)).add(forward.clone().multiplyScalar(4.2));
+    departPathRef.current.start.copy(start);
+    departPathRef.current.control.copy(control);
+    departPathRef.current.end.copy(end);
+    departPathRef.current.t = 0;
+    departPathRef.current.active = true;
+  }, [active, depart, loop, placement, ship, cameraLockRef]);
 
   useFrame((_, dt) => {
     if (!active || !ship) return;
-    tRef.current = Math.min(1, tRef.current + dt * 0.145);
-    const t = tRef.current;
-    const inv = 1 - t;
-    const { start, control, end } = pathRef.current;
-    const pos = new THREE.Vector3(
-      inv * inv * start.x + 2 * inv * t * control.x + t * t * end.x,
-      inv * inv * start.y + 2 * inv * t * control.y + t * t * end.y,
-      inv * inv * start.z + 2 * inv * t * control.z + t * t * end.z
-    );
-    ship.position.copy(pos);
-    const nextT = Math.min(1, t + 0.02);
-    const invN = 1 - nextT;
-    const next = new THREE.Vector3(
-      invN * invN * start.x + 2 * invN * nextT * control.x + nextT * nextT * end.x,
-      invN * invN * start.y + 2 * invN * nextT * control.y + nextT * nextT * end.y,
-      invN * invN * start.z + 2 * invN * nextT * control.z + nextT * nextT * end.z
-    );
-    ship.lookAt(next);
-    if (placement?.normal) {
-      const normal = new THREE.Vector3(...placement.normal).normalize();
-      const blend = THREE.MathUtils.smoothstep(t, 0.6, 0.98);
-      const tangent = next.clone().sub(pos).projectOnPlane(normal);
-      if (tangent.lengthSq() < 1e-6) {
-        tangent.copy(camera.up).projectOnPlane(normal);
+    if (!landedRef.current) {
+      tRef.current = Math.min(1, tRef.current + dt * 0.145);
+      const t = tRef.current;
+      const inv = 1 - t;
+      const { start, control, end } = pathRef.current;
+      const pos = new THREE.Vector3(
+        inv * inv * start.x + 2 * inv * t * control.x + t * t * end.x,
+        inv * inv * start.y + 2 * inv * t * control.y + t * t * end.y,
+        inv * inv * start.z + 2 * inv * t * control.z + t * t * end.z
+      );
+      ship.position.copy(pos);
+      const nextT = Math.min(1, t + 0.02);
+      const invN = 1 - nextT;
+      const next = new THREE.Vector3(
+        invN * invN * start.x + 2 * invN * nextT * control.x + nextT * nextT * end.x,
+        invN * invN * start.y + 2 * invN * nextT * control.y + nextT * nextT * end.y,
+        invN * invN * start.z + 2 * invN * nextT * control.z + nextT * nextT * end.z
+      );
+      ship.lookAt(next);
+      if (placement?.normal) {
+        const normal = new THREE.Vector3(...placement.normal).normalize();
+        const blend = THREE.MathUtils.smoothstep(t, 0.55, 0.98);
+        const tangent = next.clone().sub(pos).projectOnPlane(normal);
+        if (tangent.lengthSq() < 1e-6) {
+          const up = pathRef.current.up || camera.up;
+          tangent.copy(up).projectOnPlane(normal);
+        }
+        const approachDir = next.clone().sub(pos).normalize();
+        const finalDir = tangent.normalize();
+        const dir = approachDir.clone().lerp(finalDir, blend).normalize();
+        ship.up.copy(camera.up.clone().lerp(normal, blend).normalize());
+        ship.lookAt(pos.clone().add(dir));
       }
-      const approachDir = next.clone().sub(pos).normalize();
-      const finalDir = tangent.normalize();
-      const dir = approachDir.lerp(finalDir, blend).normalize();
-      ship.up.copy(camera.up.clone().lerp(normal, blend).normalize());
-    ship.lookAt(pos.clone().add(dir.multiplyScalar(-1)));
+      if (effectRef.current) {
+        const s = Math.max(0, (t - 0.75) / 0.25);
+        effectRef.current.scale.setScalar(0.6 + s * 2.2);
+        effectRef.current.material.opacity = 0.5 * (1 - s);
+      }
+      if (t >= 1 && !doneRef.current) {
+        doneRef.current = true;
+        landedRef.current = true;
+        landedPosRef.current = ship.position.clone();
+        landedQuatRef.current = ship.quaternion.clone();
+        if (loop) {
+          tRef.current = 0;
+          doneRef.current = false;
+          landedRef.current = false;
+          landedPosRef.current = null;
+          landedQuatRef.current = null;
+        } else {
+          onArrive?.();
+        }
+      }
+      return;
     }
-    if (effectRef.current) {
-      const s = Math.max(0, (t - 0.75) / 0.25);
-      effectRef.current.scale.setScalar(0.6 + s * 2.2);
-      effectRef.current.material.opacity = 0.5 * (1 - s);
+
+    if (departPathRef.current.active) {
+      departPathRef.current.t = Math.min(1, departPathRef.current.t + dt * 0.1);
+      const t = departPathRef.current.t;
+      const eased = t * t;
+      const inv = 1 - eased;
+      const { start, control, end } = departPathRef.current;
+      const pos = new THREE.Vector3(
+        inv * inv * start.x + 2 * inv * eased * control.x + eased * eased * end.x,
+        inv * inv * start.y + 2 * inv * eased * control.y + eased * eased * end.y,
+        inv * inv * start.z + 2 * inv * eased * control.z + eased * eased * end.z
+      );
+      ship.position.copy(pos);
+      const nextT = Math.min(1, eased + 0.02);
+      const invN = 1 - nextT;
+      const next = new THREE.Vector3(
+        invN * invN * start.x + 2 * invN * nextT * control.x + nextT * nextT * end.x,
+        invN * invN * start.y + 2 * invN * nextT * control.y + nextT * nextT * end.y,
+        invN * invN * start.z + 2 * invN * nextT * control.z + nextT * nextT * end.z
+      );
+      ship.lookAt(next);
+      if (t >= 1) {
+        ship.visible = false;
+        departPathRef.current.active = false;
+      }
+      return;
     }
-    if (t >= 1 && !doneRef.current) {
-      doneRef.current = true;
-      if (loop) {
-        tRef.current = 0;
-        doneRef.current = false;
-      } else {
-        onArrive?.();
+
+    if (landedRef.current && landedPosRef.current) {
+      ship.position.copy(landedPosRef.current);
+      if (landedQuatRef.current) {
+        ship.quaternion.copy(landedQuatRef.current);
       }
     }
   });
@@ -693,6 +1457,9 @@ export default function LandingScene({
   onSelectPlanet,
   onFocusPlanetChange,
   onPlanetPick,
+  onCityNodeSelect,
+  selectedNodeId,
+  cityFocusTarget,
   placementMode = false,
   placement = null,
   focusId = null,
@@ -701,6 +1468,9 @@ export default function LandingScene({
   shipTestMode = false,
   shipLandingKey = 0,
   cityBuilt = false,
+  cityGraphData = null,
+  cityTheme = "Thema1",
+  enableOrbit = false,
 }) {
   const [dragOffset, setDragOffset] = useState(0);
   const [targetOffset, setTargetOffset] = useState(0);
@@ -708,7 +1478,11 @@ export default function LandingScene({
   const targetOffsetRef = useRef(0);
   const lastArrowRef = useRef(0);
   const focusTimerRef = useRef(null);
+  const landingCamLockRef = useRef(null);
+  const [cameraLockReady, setCameraLockReady] = useState(false);
+  const [cameraInputLocked, setCameraInputLocked] = useState(false);
   const spacing = 12;
+  const orbitEnabled = enableOrbit || cityBuilt || shipLandingActive;
   const listLength = planets.length > 0 ? planets.length : 1;
   const currentIndex = Math.max(
     0,
@@ -722,6 +1496,20 @@ export default function LandingScene({
       setDragOffset(next);
     }
   }, [currentIndex, spacing, mode]);
+
+  const [cameraOverride, setCameraOverride] = useState(false);
+
+  useEffect(() => {
+    if (!shipLandingActive) return;
+    setCameraLockReady(false);
+    setCameraInputLocked(false);
+    setCameraOverride(false);
+  }, [shipLandingActive]);
+
+  useEffect(() => {
+    if (!cityFocusTarget) return;
+    setCameraOverride(false);
+  }, [cityFocusTarget]);
 
   useEffect(() => {
     dragOffsetRef.current = dragOffset;
@@ -760,6 +1548,8 @@ export default function LandingScene({
   const baseSunRef = useRef(new THREE.Vector3(-30, 22, -18));
   const sunPos = useRef(baseSunRef.current.clone().toArray());
   const sunAngleRef = useRef(0);
+  const starsRef = useRef(null);
+  const sunLightRef = useRef(null);
 
   const handlePick = useCallback(
     (planet, point, normal) => {
@@ -816,9 +1606,7 @@ export default function LandingScene({
   useEffect(() => {
     if (!shipLandingActive || !placement?.point || !activePlanetRef.current) return;
     if (landingLockRef.current.key === shipLandingKey && landingLockRef.current.locked) return;
-    const worldPoint = activePlanetRef.current
-      .localToWorld(new THREE.Vector3(...placement.point))
-      .add(new THREE.Vector3(0.4, 0.3, 0));
+    const worldPoint = activePlanetRef.current.localToWorld(new THREE.Vector3(...placement.point));
     const worldNormal = new THREE.Vector3(...placement.normal)
       .applyQuaternion(activePlanetRef.current.quaternion)
       .normalize();
@@ -842,12 +1630,51 @@ export default function LandingScene({
         }}
       >
         <NebulaBackdrop radius={95} sunDir={[0.8, 0.3, 0.45]} />
-        <Stars />
-        <Sun sunPosRef={sunPos} />
-        <SunRig mode={mode} base={baseSunRef.current} sunPosRef={sunPos} angleRef={sunAngleRef} />
+        <group ref={starsRef}>
+          <Stars />
+        </group>
+        <Sun sunPosRef={sunPos} lightRef={sunLightRef} />
+        <SunRig
+          mode={mode}
+          base={baseSunRef.current}
+          sunPosRef={sunPos}
+          angleRef={sunAngleRef}
+          orbit={cityBuilt}
+          lightRef={sunLightRef}
+        />
+        <StarsOrbit active={cityBuilt} groupRef={starsRef} />
         <ambientLight intensity={0.18} />
 
-        <CameraRig mode={mode} targets={targets} />
+        <CameraRig mode={mode} targets={targets} enabled={!orbitEnabled && !shipLandingActive} />
+        {orbitEnabled && !cameraInputLocked && (
+          <OrbitDragControls
+            enabled={orbitEnabled}
+            targetRef={activePlanetRef}
+            onInteract={() => setCameraOverride(true)}
+          />
+        )}
+        {cityFocusTarget && !cameraOverride && (
+          <CityFocusRig target={cityFocusTarget} enabled={cityBuilt} />
+        )}
+        {shipLandingActive && placementWorld && (
+          <>
+            <LandingCameraLock
+              active={shipLandingActive}
+              landingKey={shipLandingKey}
+              lockRef={landingCamLockRef}
+              onReady={() => setCameraLockReady(true)}
+            />
+            {cameraLockReady && !cameraOverride && (
+              <LandingCameraCue
+                active={shipLandingActive}
+                placement={placementWorld}
+                planetRef={activePlanetRef}
+                lockRef={landingCamLockRef}
+                override={cameraOverride}
+              />
+            )}
+          </>
+        )}
         <CarouselLerp
           enabled={mode === "carousel"}
           targetOffset={targetOffset}
@@ -855,7 +1682,12 @@ export default function LandingScene({
         />
 
         {mode === "main" && (
-          <PlanetNode planet={mainPlanet} position={[-2.2, -0.35, 0]} placementMode={false} />
+          <PlanetNode
+            planet={mainPlanet}
+            position={[-2.2, -0.35, 0]}
+            placementMode={false}
+            cityTheme={cityTheme}
+          />
         )}
 
         {mode === "carousel" && (
@@ -873,19 +1705,23 @@ export default function LandingScene({
                   placement={placement}
                   focusId={focusId}
                   enableRotateDrag={placementMode && focusId === planet.id && !shipLandingActive}
-                  shipLandingActive={shipLandingActive}
-                  onShipArrive={onShipArrive}
-                  shipTestMode={shipTestMode}
-                  shipLandingKey={shipLandingKey}
-                  registerActiveRef={(ref) => {
-                    if (ref) activePlanetRef.current = ref;
-                  }}
+                shipLandingActive={shipLandingActive}
+                onShipArrive={onShipArrive}
+                shipTestMode={shipTestMode}
+                shipLandingKey={shipLandingKey}
+                registerActiveRef={(ref) => {
+                  if (ref) activePlanetRef.current = ref;
+                }}
                   cityBuilt={cityBuilt}
-                />
-              );
-            })}
-          </group>
-        )}
+                  cityGraphData={cityGraphData}
+                  cityTheme={cityTheme}
+                  selectedNodeId={selectedNodeId}
+                  onCityNodeSelect={onCityNodeSelect}
+              />
+            );
+          })}
+        </group>
+      )}
         {mode === "carousel" && shipLandingActive && placementWorld && (
           <TrainLanding
             active={shipLandingActive}
@@ -893,6 +1729,8 @@ export default function LandingScene({
             onArrive={shipTestMode ? undefined : onShipArrive}
             loop={shipTestMode}
             landingKey={shipLandingKey}
+            cameraLockRef={landingCamLockRef}
+            depart={!!cityGraphData && !shipTestMode}
           />
         )}
       </Canvas>

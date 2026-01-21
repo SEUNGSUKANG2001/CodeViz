@@ -3,13 +3,13 @@
 import type { ProjectDetailResponse } from "@/lib/types";
 import type { ThemeType } from "./useCodeCityViewer";
 
-const THEMES: ThemeType[] = ["Thema1", "Thema2", "Thema3", "2D"];
+const THEMES: ThemeType[] = ["Thema1", "Thema2", "Thema3"];
 
 const THEME_INFO: Record<ThemeType, { icon: string; label: string }> = {
-  Thema1: { icon: "🏙️", label: "City" },
-  Thema2: { icon: "🌌", label: "Space" },
-  Thema3: { icon: "🌲", label: "Forest" },
-  "2D": { icon: "📊", label: "2D Graph" },
+  Thema1: { icon: "I", label: "Thema1" },
+  Thema2: { icon: "II", label: "Thema2" },
+  Thema3: { icon: "III", label: "Thema3" },
+  "2D": { icon: "", label: "" },
 };
 
 type StatsData = {
@@ -28,9 +28,15 @@ type Props = {
   onThemeChange: (theme: ThemeType) => void;
   saving?: boolean;
   onSave?: () => void;
+  selectedNode?: {
+    id: string;
+    lineCount: number;
+    imports: string[];
+    usedBy: string[];
+  } | null;
 };
 
-export function ControlsPanel({ project, theme, onThemeChange, saving, onSave }: Props) {
+export function ControlsPanel({ project, theme, onThemeChange, saving, onSave, selectedNode }: Props) {
   const stats = project?.latestJob?.result?.stats as StatsData | undefined;
 
   const formatLabel = (key: string) => {
@@ -66,26 +72,20 @@ export function ControlsPanel({ project, theme, onThemeChange, saving, onSave }:
     : [];
 
   return (
-    <aside className="overflow-y-auto border-l border-neutral-100 bg-white p-6 space-y-8">
+    <aside className="h-full overflow-y-auto border-l border-white/10 bg-black/40 p-6 backdrop-blur-md space-y-8">
       <div>
-        <div className="text-[11px] tracking-[0.18em] text-neutral-400 mb-4">SCENE</div>
+        <div className="text-[11px] tracking-[0.18em] text-white/45 mb-4">SCENE</div>
         <div className="grid grid-cols-3 gap-2">
           {THEMES.map((t) => (
             <button
               key={t}
               onClick={() => onThemeChange(t)}
-              className={`rounded-xl p-3 text-center transition ${theme === t
-                ? "bg-indigo-50 ring-2 ring-indigo-500"
-                : "bg-neutral-50 hover:bg-neutral-100"
-                }`}
+              className={`rounded-none border border-white/10 px-3 py-3 text-center transition ${
+                theme === t ? "bg-white/10 text-cyan-200" : "bg-white/5 text-white/70 hover:bg-white/10"
+              }`}
             >
-              <div className="text-xl">{THEME_INFO[t].icon}</div>
-              <div
-                className={`mt-1 text-xs font-medium ${theme === t ? "text-indigo-600" : "text-neutral-600"
-                  }`}
-              >
-                {THEME_INFO[t].label}
-              </div>
+              <div className="text-[11px] tracking-[0.2em]">{THEME_INFO[t].icon}</div>
+              <div className="mt-1 text-xs font-medium">{THEME_INFO[t].label}</div>
             </button>
           ))}
         </div>
@@ -94,21 +94,51 @@ export function ControlsPanel({ project, theme, onThemeChange, saving, onSave }:
           <button
             onClick={onSave}
             disabled={saving || !project}
-            className="mt-4 w-full rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:bg-neutral-200 disabled:text-neutral-500"
+            className="mt-4 w-full border border-white/15 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/80 hover:bg-white/10 disabled:text-white/40"
           >
             {saving ? "Saving..." : "Apply Theme"}
           </button>
         )}
       </div>
 
+      {selectedNode && (
+        <div>
+          <div className="text-[11px] tracking-[0.18em] text-white/45 mb-4">SELECTION</div>
+          <div className="rounded-none border border-white/10 bg-white/5 px-3 py-3 text-xs text-white/80 space-y-2">
+            <div className="text-white/90 font-medium break-all">{selectedNode.id}</div>
+            <div className="text-white/60">Lines: {selectedNode.lineCount.toLocaleString()}</div>
+            <div>
+              <div className="text-[10px] text-white/50 uppercase">Imports</div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {selectedNode.imports.length ? selectedNode.imports.slice(0, 6).map((imp) => (
+                  <span key={imp} className="rounded-none border border-white/10 bg-white/10 px-2 py-1 text-[10px] text-white/70">
+                    {imp.split(/[\\/]/).pop()}
+                  </span>
+                )) : <span className="text-[10px] text-white/40">None</span>}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-white/50 uppercase">Used By</div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {selectedNode.usedBy.length ? selectedNode.usedBy.slice(0, 6).map((imp) => (
+                  <span key={imp} className="rounded-none border border-white/10 bg-white/10 px-2 py-1 text-[10px] text-white/70">
+                    {imp.split(/[\\/]/).pop()}
+                  </span>
+                )) : <span className="text-[10px] text-white/40">None</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {statEntries.length > 0 && (
         <div>
-          <div className="text-[11px] tracking-[0.18em] text-neutral-400 mb-4">STATISTICS</div>
+          <div className="text-[11px] tracking-[0.18em] text-white/45 mb-4">STATISTICS</div>
           <div className="grid grid-cols-2 gap-2">
             {statEntries.map(({ key, value }) => (
-              <div key={key} className="rounded-xl bg-neutral-50 px-3 py-2">
-                <div className="text-[10px] text-neutral-500 uppercase">{formatLabel(key)}</div>
-                <div className="mt-0.5 text-lg font-semibold text-neutral-900">
+              <div key={key} className="rounded-none border border-white/10 bg-white/5 px-3 py-2">
+                <div className="text-[10px] text-white/50 uppercase">{formatLabel(key)}</div>
+                <div className="mt-0.5 text-lg font-semibold text-white">
                   {formatValue(value)}
                 </div>
               </div>
@@ -117,12 +147,12 @@ export function ControlsPanel({ project, theme, onThemeChange, saving, onSave }:
 
           {languageEntries.length > 0 && (
             <div className="mt-4">
-              <div className="text-[10px] text-neutral-500 uppercase mb-2">Languages</div>
+              <div className="text-[10px] text-white/50 uppercase mb-2">Languages</div>
               <div className="flex flex-wrap gap-1">
                 {languageEntries.map(([lang, count]) => (
                   <span
                     key={lang}
-                    className="rounded-full bg-neutral-100 px-2 py-1 text-xs text-neutral-600"
+                    className="rounded-none border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70"
                   >
                     {lang}: {count}
                   </span>
@@ -134,16 +164,16 @@ export function ControlsPanel({ project, theme, onThemeChange, saving, onSave }:
       )}
 
       <div>
-        <div className="text-[11px] tracking-[0.18em] text-neutral-400 mb-4">PROJECT</div>
-        <div className="space-y-3 text-sm">
+        <div className="text-[11px] tracking-[0.18em] text-white/45 mb-4">PROJECT</div>
+        <div className="space-y-3 text-sm text-white/75">
           {project?.repoUrl && (
             <div>
-              <div className="text-[10px] text-neutral-500 uppercase">Repository</div>
+              <div className="text-[10px] text-white/50 uppercase">Repository</div>
               <a
                 href={project.repoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-all text-indigo-600 hover:underline"
+                className="break-all text-cyan-200 hover:underline"
               >
                 {project.repoUrl}
               </a>
@@ -152,37 +182,13 @@ export function ControlsPanel({ project, theme, onThemeChange, saving, onSave }:
 
           {project?.ref && (
             <div>
-              <div className="text-[10px] text-neutral-500 uppercase">Branch / Ref</div>
-              <div className="text-neutral-800">{project.ref}</div>
-            </div>
-          )}
-
-          {project?.latestJob?.status && (
-            <div>
-              <div className="text-[10px] text-neutral-500 uppercase">Status</div>
-              <div className={`inline-flex items-center gap-1.5 ${project.latestJob.status === "done" ? "text-green-600" :
-                project.latestJob.status === "running" ? "text-indigo-600" :
-                  project.latestJob.status === "failed" ? "text-red-600" :
-                    "text-neutral-600"
-                }`}>
-                <span className={`h-2 w-2 rounded-full ${project.latestJob.status === "done" ? "bg-green-500" :
-                  project.latestJob.status === "running" ? "bg-indigo-500 animate-pulse" :
-                    project.latestJob.status === "failed" ? "bg-red-500" :
-                      "bg-neutral-400"
-                  }`} />
-                {project.latestJob.status.charAt(0).toUpperCase() + project.latestJob.status.slice(1)}
-              </div>
+              <div className="text-[10px] text-white/50 uppercase">Branch / Ref</div>
+              <div className="text-white/80">{project.ref}</div>
             </div>
           )}
         </div>
       </div>
 
-      <div className="rounded-xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500 space-y-1">
-        <div className="font-medium text-neutral-700">Controls</div>
-        <div>Drag to rotate</div>
-        <div>Scroll to zoom</div>
-        <div>Click node for details</div>
-      </div>
     </aside>
   );
 }

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import type { GraphData, ResultUrlResponse } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
-import { useCodeCityViewer, type ThemeType } from "@/components/viewer/useCodeCityViewer";
-import { TwoViewer } from "@/components/viewer/TwoViewer";
+import type { ThemeType } from "@/components/viewer/useCodeCityViewer";
 import { cn } from "@/lib/utils";
-import { CommitInfo, Snapshot } from "@/lib/types";
+import type { CommitInfo, Snapshot } from "@/lib/types";
+
+const LandingScene = dynamic<any>(() => import("@/components/planet/LandingScene"), { ssr: false });
 
 type Props = {
   jobId?: string | null;
@@ -22,11 +24,60 @@ type Props = {
 };
 
 const THEMES: { id: ThemeType; label: string; icon: string }[] = [
-  { id: "Thema1", label: "City", icon: "🏙️" },
-  { id: "Thema2", label: "Space", icon: "🌌" },
-  { id: "Thema3", label: "Forest", icon: "🌲" },
-  { id: "2D", label: "2D Graph", icon: "📊" },
+  { id: "Thema1", label: "Thema 1", icon: "🏙️" },
+  { id: "Thema2", label: "Thema 2", icon: "🌌" },
+  { id: "Thema3", label: "Thema 3", icon: "🌲" },
 ];
+
+function buildGraphFromFiles(files: Record<string, any>) {
+  const nodes = Object.entries(files).map(([path, info]) => ({
+    id: path,
+    name: path.split("/").pop() || path,
+    path,
+    type: "file",
+    lines: info.line_count ?? info.lineCount ?? info.linecount ?? 10,
+  }));
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const edges: any[] = [];
+  Object.entries(files).forEach(([sourcePath, info]) => {
+    const deps = info.depends_on || info.dependsOn || [];
+    deps.forEach((dep: any) => {
+      const targetId = dep.target || dep.id || dep.path;
+      if (!targetId) return;
+      if (!nodeIds.has(targetId)) {
+        nodeIds.add(targetId);
+        nodes.push({
+          id: targetId,
+          name: targetId.split("/").pop() || targetId,
+          path: targetId,
+          type: "file",
+          lines: 10,
+        });
+      }
+      edges.push({ source: sourcePath, target: targetId, type: dep.type || "import" });
+    });
+  });
+  return { nodes, edges };
+}
+
+function normalizeGraphData(data: GraphData): GraphData {
+  if (data?.nodes?.length) return data;
+  const history = (data as any)?.history;
+  if (Array.isArray(history) && history.length > 0) {
+    const latest = history[history.length - 1];
+    if (latest?.files) {
+      return { ...data, ...buildGraphFromFiles(latest.files) };
+    }
+  }
+  const snapshots = data?.snapshots;
+  if (Array.isArray(snapshots) && snapshots.length > 0) {
+    const latest = snapshots[snapshots.length - 1];
+    if (latest?.files) {
+      return { ...data, ...buildGraphFromFiles(latest.files) };
+    }
+  }
+  return data;
+}
 
 export function PostVisualization({
   jobId,
@@ -49,8 +100,6 @@ export function PostVisualization({
   const [currentTheme, setCurrentTheme] = useState<ThemeType>(initialTheme);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
-  useCodeCityViewer(containerRef, viewerReady ? activeGraphData : null, { theme: currentTheme });
-
   useEffect(() => {
     if (!graphData) {
       setActiveGraphData(null);
@@ -60,39 +109,13 @@ export function PostVisualization({
     if (historyIndex === -1 || !graphData.history || graphData.history.length === 0) {
       setActiveGraphData(graphData);
     } else {
-      const targetCommit = graphData.history[historyIndex];
+      const targetCommit = graphData.history[historyIndex] as any;
       const snapshot = graphData.snapshots?.find((s) => s.hash === targetCommit.hash);
 
-      if (snapshot) {
-        const snapshotNodes = Object.entries(snapshot.files).map(([path, info]) => ({
-          id: path,
-          name: path.split("/").pop() || path,
-          path: path,
-          type: "file",
-          lines: info.line_count,
-          language: info.language,
-        }));
-
-        const snapshotEdges: any[] = [];
-        const nodeIds = new Set(snapshotNodes.map((n) => n.id));
-
-        Object.entries(snapshot.files).forEach(([sourcePath, info]) => {
-          info.depends_on.forEach((dep) => {
-            if (nodeIds.has(dep.target)) {
-              snapshotEdges.push({
-                source: sourcePath,
-                target: dep.target,
-                type: dep.type || "import",
-              });
-            }
-          });
-        });
-
-        setActiveGraphData({
-          ...graphData,
-          nodes: snapshotNodes,
-          edges: snapshotEdges,
-        });
+      if (snapshot?.files) {
+        setActiveGraphData({ ...graphData, ...buildGraphFromFiles(snapshot.files) });
+      } else if (targetCommit?.files) {
+        setActiveGraphData({ ...graphData, ...buildGraphFromFiles(targetCommit.files) });
       } else {
         setActiveGraphData(graphData);
       }
@@ -118,12 +141,16 @@ export function PostVisualization({
         );
         const graphRes = await fetch(urlRes.data.url);
         if (!graphRes.ok) throw new Error("Failed to fetch graph data");
-        const data: GraphData = await graphRes.json();
+        const raw = (await graphRes.json()) as GraphData;
+        const data: GraphData = {
+          ...raw,
+          history: raw.history ?? history,
+          snapshots: raw.snapshots ?? snapshots,
+        };
+        const normalized = normalizeGraphData(data);
         if (!cancelled) {
-          setGraphData(data);
-          setTimeout(() => {
-            if (!cancelled) setViewerReady(true);
-          }, 100);
+          setGraphData(normalized);
+          setViewerReady(true);
         }
       } catch (e) {
         if (!cancelled) {
@@ -141,6 +168,18 @@ export function PostVisualization({
     };
   }, [jobId, jobStatus]);
 
+  useEffect(() => {
+    if (!graphData) return;
+    setGraphData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        history: prev.history ?? history,
+        snapshots: prev.snapshots ?? snapshots,
+      };
+    });
+  }, [history, snapshots, graphData]);
+
   if (!jobId || jobStatus !== "done" || graphError) {
     return (
       <div className="aspect-[16/9] w-full overflow-hidden rounded-3xl border border-white/5 bg-[#121212]">
@@ -156,33 +195,50 @@ export function PostVisualization({
     );
   }
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const preventScroll = (event: Event) => {
+      event.preventDefault();
+    };
+    el.addEventListener("wheel", preventScroll, { passive: false });
+    el.addEventListener("touchmove", preventScroll, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", preventScroll);
+      el.removeEventListener("touchmove", preventScroll);
+    };
+  }, []);
+
   return (
     <>
-      <div className={cn(
+      <div
+        ref={containerRef}
+        className={cn(
         "relative w-full overflow-hidden transition-all duration-700 ease-in-out",
         immersive
           ? "fixed inset-0 z-50 rounded-none bg-black"
           : "aspect-[16/9] rounded-3xl border border-white/10 bg-black shadow-2xl"
-      )}>
-        <div
-          ref={containerRef}
-          className="absolute inset-0"
-          style={{
-            visibility: viewerReady && activeGraphData && currentTheme !== "2D" ? "visible" : "hidden"
-          }}
-        />
-
-        {currentTheme === "2D" && (
-          <div className="absolute inset-0 bg-black">
-            <TwoViewer
-              data={activeGraphData}
-              onNodeClick={() => { }}
-              focusedNode={null}
+      )}
+      >
+        <div className="absolute inset-0">
+          {activeGraphData && (
+            <LandingScene
+              mode="main"
+              planets={[]}
+              activePlanetId={null}
+              placementMode={false}
+              shipLandingActive={false}
+              shipTestMode={false}
+              shipLandingKey={0}
+              cityBuilt={true}
+              cityGraphData={activeGraphData}
+              cityTheme={currentTheme}
+              enableOrbit={true}
             />
-          </div>
-        )}
+          )}
+        </div>
 
-        {(graphLoading || !viewerReady) && (
+        {(graphLoading || !activeGraphData) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-20">
             <div className="flex items-center gap-3">
               <div className="h-2 w-2 animate-bounce rounded-full bg-indigo-500" />

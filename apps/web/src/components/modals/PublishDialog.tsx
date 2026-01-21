@@ -153,55 +153,61 @@ export function PublishDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent
+        className="max-w-2xl border border-white/10 bg-black/80 text-white shadow-2xl backdrop-blur-md"
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerMove={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
+      >
         <DialogHeader>
-          <DialogTitle className="text-neutral-900">Publish to community</DialogTitle>
-          <DialogDescription className="text-neutral-500">
+          <DialogTitle className="text-white">Publish to community</DialogTitle>
+          <DialogDescription className="text-white/60">
             Share your visualization with the world. Give it a title and description.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <div>
-            <label className="mb-2 block text-sm font-medium text-neutral-900">Title</label>
+            <label className="mb-2 block text-sm font-medium text-white/90">Title</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Give your visualization a title"
-              className="w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-none border border-white/15 bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-white/40 focus:ring-2 focus:ring-cyan-400"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-neutral-900">Repository</label>
+            <label className="mb-2 block text-sm font-medium text-white/90">Repository</label>
             <input
               value={repoUrl}
               readOnly
-              className="w-full rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-500 outline-none"
+              className="w-full rounded-none border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/60 outline-none"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-neutral-900">Description</label>
+            <label className="mb-2 block text-sm font-medium text-white/90">Description</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="Describe your project..."
-              className="w-full min-h-[120px] rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="w-full min-h-[140px] rounded-none border border-white/15 bg-white/5 px-4 py-3 text-sm outline-none placeholder:text-white/40 focus:ring-2 focus:ring-cyan-400 resize-none"
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <button
               onClick={() => onOpenChange(false)}
-              className="rounded-full bg-neutral-100 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-200"
+              className="rounded-none border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/70 hover:bg-white/10"
             >
               Cancel
             </button>
             <button
               onClick={onPublish}
               disabled={loading || !title.trim()}
-              className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:bg-neutral-200 disabled:text-neutral-500"
+              className="rounded-none bg-cyan-300/90 px-4 py-2 text-sm font-medium text-black hover:bg-cyan-200 disabled:bg-white/10 disabled:text-white/40"
             >
               {loading ? "Publishing..." : "Publish"}
             </button>

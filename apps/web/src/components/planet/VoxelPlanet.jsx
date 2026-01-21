@@ -859,8 +859,9 @@ export default function VoxelPlanet({
   const root = useRef()
   const cloudGroup = useRef()
 
+  const sunDirMemo = useMemo(() => [sunDir[0], sunDir[1], sunDir[2]], [sunDir[0], sunDir[1], sunDir[2]])
   const density = useMemo(() => makePlanetDensity({ seed, radius }), [seed, radius])
-  const sun = useMemo(() => new THREE.Vector3(...sunDir).normalize(), [sunDir])
+  const sun = useMemo(() => new THREE.Vector3(...sunDirMemo).normalize(), [sunDirMemo])
 
   const geometry = useMemo(() => {
     return buildGeometry({
@@ -916,7 +917,7 @@ export default function VoxelPlanet({
   return (
     <group ref={root}>
 
-      {seaLevelWorld <= 0.1 && <Water radius={radius} seaLevelWorld={seaLevelWorld} sunDir={sunDir} />}
+      {seaLevelWorld <= 0.1 && <Water radius={radius} seaLevelWorld={seaLevelWorld} sunDir={sunDirMemo} />}
 
       {/* land */}
       <mesh geometry={geometry} material={landMat} castShadow receiveShadow />
@@ -929,8 +930,8 @@ export default function VoxelPlanet({
 
       {/* clouds + (2) shadows (same rotation group so they move together) */}
       <group ref={cloudGroup}>
-        <CloudShadow radius={radius} seed={seed} sunDir={sunDir} />
-        <Clouds3 radius={radius} seed={seed} sunDir={sunDir} cloudColor={cloudColor} />
+        <CloudShadow radius={radius} seed={seed} sunDir={sunDirMemo} />
+        <Clouds3 radius={radius} seed={seed} sunDir={sunDirMemo} cloudColor={cloudColor} />
       </group>
     </group>
   )
