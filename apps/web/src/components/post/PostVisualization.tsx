@@ -229,12 +229,21 @@ export function PostVisualization({
 
   useEffect(() => {
     if (!graphData) return;
+
     setGraphData((prev) => {
       if (!prev) return prev;
+      // If we already have history/snapshots or they are identical to props, return prev to bail out
+      const nextHistory = prev.history ?? history;
+      const nextSnapshots = prev.snapshots ?? snapshots;
+
+      if (nextHistory === prev.history && nextSnapshots === prev.snapshots) {
+        return prev;
+      }
+
       return {
         ...prev,
-        history: prev.history ?? history,
-        snapshots: prev.snapshots ?? snapshots,
+        history: nextHistory,
+        snapshots: nextSnapshots,
       };
     });
   }, [history, snapshots, graphData]);
@@ -259,11 +268,11 @@ export function PostVisualization({
       <div
         ref={containerRef}
         className={cn(
-        "relative w-full overflow-hidden transition-all duration-700 ease-in-out",
-        immersive
-          ? "fixed inset-0 z-50 rounded-none bg-black"
-          : "aspect-[16/9] rounded-3xl border border-white/10 bg-black shadow-2xl"
-      )}
+          "relative w-full overflow-hidden transition-all duration-700 ease-in-out",
+          immersive
+            ? "fixed inset-0 z-50 rounded-none bg-black"
+            : "aspect-[16/9] rounded-3xl border border-white/10 bg-black shadow-2xl"
+        )}
         onWheelCapture={(e) => {
           e.preventDefault();
         }}
@@ -388,23 +397,23 @@ export function PostVisualization({
                     {historyIndex === -1
                       ? "Latest"
                       : (() => {
-                          const entry = activeGraphData.history?.[historyIndex] as any;
-                          if (entry?.timestamp) {
-                            return new Date(entry.timestamp * 1000).toLocaleDateString();
-                          }
-                          if (entry?.date) {
-                            return new Date(entry.date).toLocaleDateString();
-                          }
-                          return "Snapshot";
-                        })()}
+                        const entry = activeGraphData.history?.[historyIndex] as any;
+                        if (entry?.timestamp) {
+                          return new Date(entry.timestamp * 1000).toLocaleDateString();
+                        }
+                        if (entry?.date) {
+                          return new Date(entry.date).toLocaleDateString();
+                        }
+                        return "Snapshot";
+                      })()}
                   </span>
                   <span className="text-white/50">
                     {historyIndex === -1
                       ? "Initial layout"
                       : (() => {
-                          const entry = activeGraphData.history?.[historyIndex] as any;
-                          return entry?.message || entry?.hash || "Snapshot";
-                        })()}
+                        const entry = activeGraphData.history?.[historyIndex] as any;
+                        return entry?.message || entry?.hash || "Snapshot";
+                      })()}
                   </span>
                 </div>
                 {(() => {
