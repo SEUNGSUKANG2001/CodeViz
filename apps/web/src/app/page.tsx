@@ -498,10 +498,6 @@ function LandingPageClient() {
     imports: string[];
     usedBy: string[];
   } | null>(null);
-  const [cityFocusTarget, setCityFocusTarget] = useState<{
-    point: [number, number, number];
-    normal: [number, number, number];
-  } | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [captureFn, setCaptureFn] = useState<(() => Promise<string>) | null>(null);
   const isCustomizing = pendingProjectId !== null && customPlanets.length > 0;
@@ -704,22 +700,25 @@ function LandingPageClient() {
     }
   }, []);
 
+  const showCustomCarousel = isCustomizing && !cityBuilt;
+
   useEffect(() => {
     if (viewMode !== "carousel") return;
     if (focusedPlanet) return;
-    const source = customPlanets.length ? customPlanets : planets;
+    const source = showCustomCarousel ? customPlanets : planets;
     const fallback =
       source.find((p) => p.id === defaultPlanetId) || source[0] || null;
     setFocusedPlanet(fallback);
-  }, [viewMode, focusedPlanet, planets, defaultPlanetId, customPlanets]);
+  }, [viewMode, focusedPlanet, planets, defaultPlanetId, customPlanets, showCustomCarousel]);
 
   useEffect(() => {
+    if (!showCustomCarousel) return;
     if (!customPlanets.length) return;
     setFocusedPlanet(customPlanets[0] ?? null);
-  }, [customPlanets]);
+  }, [customPlanets, showCustomCarousel]);
 
-  const carouselPlanets = isCustomizing ? customPlanets : planets;
-  const carouselActiveId = isCustomizing
+  const carouselPlanets = showCustomCarousel ? customPlanets : planets;
+  const carouselActiveId = showCustomCarousel
     ? focusedPlanet?.id ?? customPlanets[0]?.id ?? null
     : defaultPlanetId;
 
@@ -803,10 +802,6 @@ function LandingPageClient() {
         imports,
         usedBy,
       });
-      setCityFocusTarget({
-        point: [position.x, position.y, position.z],
-        normal: [normal.x, normal.y, normal.z],
-      });
     },
     [displayGraphData]
   );
@@ -816,7 +811,6 @@ function LandingPageClient() {
     const exists = displayGraphData.nodes.some((n: any) => n.id === selectedCityNode.id);
     if (!exists) {
       setSelectedCityNode(null);
-      setCityFocusTarget(null);
     }
   }, [displayGraphData, selectedCityNode]);
 
@@ -948,7 +942,6 @@ function LandingPageClient() {
           enableOrbit={cityBuilt && !publishOpen}
           selectedNodeId={selectedCityNode?.id ?? null}
           onCityNodeSelect={handleCityNodeSelect}
-          cityFocusTarget={cityFocusTarget}
           onCaptureReady={(fn: () => Promise<string>) => setCaptureFn(() => fn)}
         />
       </div>

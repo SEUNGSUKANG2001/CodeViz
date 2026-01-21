@@ -13,7 +13,7 @@ export function TopNav({ isAuthed }: Props) {
     <header className="relative z-20 w-full px-10 py-7">
       <div className="mx-auto flex max-w-[1600px] items-center justify-between">
         <Link href="/" className="flex items-center gap-3">
-          <div className="relative h-9 w-9 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md">
+          <div className="relative h-9 w-9 rounded-none border border-white/20 bg-white/10 backdrop-blur-md">
             <div className="absolute left-2 top-2 h-2 w-2 rounded-full bg-indigo-500" />
           </div>
           <span className="text-sm font-semibold tracking-[0.18em] text-white">

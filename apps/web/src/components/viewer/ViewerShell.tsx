@@ -96,7 +96,7 @@ export function ViewerShell({ projectId }: { projectId: string }) {
       <div className="flex h-16 items-center justify-between border-b border-white/10 bg-black/40 px-6 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-8 w-8 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md">
+            <div className="relative h-8 w-8 rounded-none border border-white/20 bg-white/10 backdrop-blur-md">
               <div className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-indigo-500" />
             </div>
             <span className="text-sm font-semibold tracking-[0.18em] text-white">CODEVIZ</span>

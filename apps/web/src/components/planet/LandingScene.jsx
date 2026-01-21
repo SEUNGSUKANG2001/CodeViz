@@ -138,7 +138,7 @@ function Stars({ count = 2000, radius = 90 }) {
   return <points geometry={geom} material={mat} />;
 }
 
-function NebulaBackdrop({ radius = 95, sunDir = [0.8, 0.3, 0.45] }) {
+function NebulaBackdrop({ radius = 95, sunDir = [0.8, 0.3, 0.45], glow = 0 }) {
   const sun = useMemo(() => new THREE.Vector3(...sunDir).normalize(), [sunDir]);
 
   const mat = useMemo(
@@ -150,6 +150,7 @@ function NebulaBackdrop({ radius = 95, sunDir = [0.8, 0.3, 0.45] }) {
           uTop: { value: new THREE.Color("#0b1135") },
           uBottom: { value: new THREE.Color("#02030b") },
           uSun: { value: sun.clone() },
+          uGlow: { value: glow },
         },
         vertexShader: `
           varying vec3 vDir;
@@ -163,17 +164,18 @@ function NebulaBackdrop({ radius = 95, sunDir = [0.8, 0.3, 0.45] }) {
           uniform vec3 uTop;
           uniform vec3 uBottom;
           uniform vec3 uSun;
+          uniform float uGlow;
           varying vec3 vDir;
           void main(){
             float h = clamp((vDir.y + 1.0) * 0.5, 0.0, 1.0);
             vec3 col = mix(uBottom, uTop, h);
-            float glow = pow(max(dot(vDir, normalize(uSun)),0.0), 12.0) * 0.25;
+            float glow = pow(max(dot(vDir, normalize(uSun)),0.0), 12.0) * uGlow;
             col += glow * vec3(1.0,0.8,0.5);
             gl_FragColor = vec4(col,1.0);
           }
         `,
       }),
-    [sun]
+    [sun, glow]
   );
 
   return (
@@ -406,7 +408,7 @@ function OrbitDragControls({ enabled, targetRef, onInteract }) {
 function SunRig({ mode, base, sunPosRef, angleRef, lightRef = null, orbit = false }) {
   useFrame((_, dt) => {
     if (orbit) {
-      angleRef.current += dt * 0.06;
+      angleRef.current += dt * 0.0858;
     } else {
       const targetAngle = mode === "carousel" ? Math.PI * 0.25 : 0;
       const t = 1 - Math.exp(-1 * dt);
@@ -527,7 +529,7 @@ function CityFocusRig({ target, enabled }) {
 function StarsOrbit({ active, groupRef }) {
   useFrame((_, dt) => {
     if (!active || !groupRef.current) return;
-    groupRef.current.rotation.y += dt * 0.05;
+    groupRef.current.rotation.y += dt * 0.0715;
   });
   return null;
 }
@@ -590,6 +592,7 @@ function PlanetNode({
   cityTheme = "Thema1",
   selectedNodeId,
   onCityNodeSelect,
+  sunPosRef,
 }) {
   const params = resolvePlanetParams(planet);
   const palette = planet?.palette || {};
@@ -696,6 +699,7 @@ function PlanetNode({
           theme={cityTheme}
           selectedNodeId={selectedNodeId}
           onNodeSelect={onCityNodeSelect}
+          sunPosRef={sunPosRef}
         />
       )}
       {cityBuilt && !cityGraphData && placement && focusId === planet?.id && (
@@ -984,7 +988,7 @@ function LandingCharacters({ placement, count = 4 }) {
   );
 }
 
-function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect }) {
+function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect, sunPosRef }) {
   const groupRef = useRef(null);
   const objLoaderRef = useRef(new OBJLoader());
   const mtlLoaderRef = useRef(new MTLLoader());
@@ -998,6 +1002,12 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
   const [internalSelectedId, setInternalSelectedId] = useState(null);
   const activeSelectedId = selectedNodeId ?? internalSelectedId;
   const lastSelectedRef = useRef(null);
+  const buildingMeshesRef = useRef([]);
+  const nightColor = useMemo(() => new THREE.Color("#ffd38a"), []);
+  const tmpQuat = useMemo(() => new THREE.Quaternion(), []);
+  const tmpVec = useMemo(() => new THREE.Vector3(), []);
+  const tmpCenter = useMemo(() => new THREE.Vector3(), []);
+  const tmpSun = useMemo(() => new THREE.Vector3(), []);
   const clickStartRef = useRef({ x: 0, y: 0, moved: false });
   const highlightEdges = useCallback((selectedId) => {
     if (!edgeGroupRef.current) return;
@@ -1032,6 +1042,7 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
   useEffect(() => {
     if (!groupRef.current || !placement?.point || !nodes.length) return;
     groupRef.current.clear();
+    buildingMeshesRef.current = [];
     const config = CITY_THEME_CONFIG[theme] || CITY_THEME_CONFIG.Thema1;
     const startCode = "a".charCodeAt(0);
     const endCode = config.lastBuilding.charCodeAt(0);
@@ -1160,6 +1171,26 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              const material = child.material;
+              const storeBase = (mat) => {
+                if (!mat || !("emissive" in mat)) return;
+                if (!mat.userData) mat.userData = {};
+                if (!mat.userData.emissiveBase) {
+                  mat.userData.emissiveBase = mat.emissive.clone();
+                }
+                if (mat.userData.emissiveIntensityBase == null) {
+                  mat.userData.emissiveIntensityBase = mat.emissiveIntensity ?? 0;
+                }
+                if (mat.userData.nightFlicker == null) {
+                  mat.userData.nightFlicker = 0.6 + Math.random() * 0.6;
+                }
+              };
+              if (Array.isArray(material)) {
+                material.forEach(storeBase);
+              } else {
+                storeBase(material);
+              }
+              buildingMeshesRef.current.push(child);
             }
           });
           const wrapper = new THREE.Group();
@@ -1249,6 +1280,48 @@ function CityCluster({ placement, graphData, theme, selectedNodeId, onNodeSelect
     if (lastSelectedRef.current === activeSelectedId) return;
     lastSelectedRef.current = activeSelectedId;
     highlightEdges(activeSelectedId);
+  });
+
+  useFrame(() => {
+    if (!groupRef.current || buildingMeshesRef.current.length === 0) return;
+    const planet = groupRef.current.parent;
+    if (!planet) return;
+    planet.getWorldQuaternion(tmpQuat);
+    planet.getWorldPosition(tmpCenter);
+    if (sunPosRef?.current) {
+      tmpSun.set(sunPosRef.current[0], sunPosRef.current[1], sunPosRef.current[2]);
+    } else {
+      tmpSun.set(-30, 22, -18);
+    }
+    tmpSun.sub(tmpCenter).normalize();
+
+    buildingMeshesRef.current.forEach((mesh) => {
+      const localNormal = mesh.userData?.nodeNormal;
+      if (!localNormal) return;
+      tmpVec.copy(localNormal).applyQuaternion(tmpQuat).normalize();
+      const dot = tmpVec.dot(tmpSun);
+      const night = Math.max(0, (-dot - 0.2) / 0.6);
+      const intensity = Math.min(1, night * night);
+      const applyMat = (mat) => {
+        if (!mat || !("emissive" in mat)) return;
+        const base = mat.userData?.emissiveBase || new THREE.Color(0, 0, 0);
+        const baseIntensity = mat.userData?.emissiveIntensityBase ?? 0;
+        if (intensity <= 0) {
+          mat.emissive.copy(base);
+          mat.emissiveIntensity = baseIntensity;
+          return;
+        }
+        const emissive = base.clone().lerp(nightColor, intensity);
+        mat.emissive.copy(emissive);
+        const flicker = mat.userData?.nightFlicker ?? 1;
+        mat.emissiveIntensity = baseIntensity + intensity * 0.75 * flicker;
+      };
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach(applyMat);
+      } else {
+        applyMat(mesh.material);
+      }
+    });
   });
 
   useEffect(() => {
@@ -1721,7 +1794,7 @@ export default function LandingScene({
         }}
       >
         <ScreenshotManager onCaptureReady={onCaptureReady} />
-        <NebulaBackdrop radius={95} sunDir={[0.8, 0.3, 0.45]} />
+        <NebulaBackdrop radius={95} sunDir={[0.8, 0.3, 0.45]} glow={0} />
         <group ref={starsRef}>
           <Stars />
         </group>
@@ -1735,7 +1808,7 @@ export default function LandingScene({
           lightRef={sunLightRef}
         />
         <StarsOrbit active={cityBuilt} groupRef={starsRef} />
-        <ambientLight intensity={0.18} />
+        <ambientLight intensity={0.12} />
 
         <CameraRig mode={mode} targets={targets} enabled={!orbitEnabled && !shipLandingActive} />
         {orbitEnabled && !cameraInputLocked && (
@@ -1781,11 +1854,12 @@ export default function LandingScene({
             placement={placement}
             focusId={mainPlanet?.id ?? null}
             cityBuilt={cityBuilt}
-            cityGraphData={cityGraphData}
-            cityTheme={cityTheme}
-            selectedNodeId={selectedNodeId}
-            onCityNodeSelect={onCityNodeSelect}
-          />
+          cityGraphData={cityGraphData}
+          cityTheme={cityTheme}
+          selectedNodeId={selectedNodeId}
+          onCityNodeSelect={onCityNodeSelect}
+          sunPosRef={sunPos}
+        />
         )}
 
         {mode === "carousel" && (
@@ -1815,6 +1889,7 @@ export default function LandingScene({
                   cityTheme={cityTheme}
                   selectedNodeId={selectedNodeId}
                   onCityNodeSelect={onCityNodeSelect}
+                  sunPosRef={sunPos}
                 />
               );
             })}
