@@ -689,7 +689,7 @@ function PlanetNode({
       {!cityBuilt && placementMode && placement && focusId === planet?.id && (
         <PlacementMarker placement={placement} />
       )}
-      {placement && focusId === planet?.id && cityGraphData && (
+      {placement && focusId === planet?.id && cityGraphData && cityBuilt && (
         <CityCluster
           placement={placement}
           graphData={cityGraphData}
@@ -1299,7 +1299,7 @@ function loadTrainPart(part, objLoader, mtlLoader) {
   });
 }
 
-function TrainLanding({ active, placement, onArrive, loop = false, landingKey, cameraLockRef, depart = false }) {
+function TrainLanding({ active, placement, onArrive, onDepart, loop = false, landingKey, cameraLockRef, depart = false }) {
   const { camera } = useThree();
   const [ship, setShip] = useState(null);
   const pathRef = useRef({
@@ -1316,7 +1316,7 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey, c
   });
   const tRef = useRef(0);
   const doneRef = useRef(false);
-  const landedRef = useRef(false);
+  const [hasLanded, setHasLanded] = useState(false);
   const landedPosRef = useRef(null);
   const landedQuatRef = useRef(null);
   const effectRef = useRef(null);
@@ -1351,10 +1351,10 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey, c
 
   useEffect(() => {
     if (!active || !placement?.point || !ship) return;
-    if (landedRef.current) return;
+    if (hasLanded) return;
     tRef.current = 0;
     doneRef.current = false;
-    landedRef.current = false;
+    setHasLanded(false);
     landedPosRef.current = null;
     landedQuatRef.current = null;
     departPathRef.current.active = false;
@@ -1388,7 +1388,7 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey, c
   useEffect(() => {
     if (!active || !ship || !placement?.point) return;
     if (!depart || loop) return;
-    if (!landedRef.current) return;
+    if (!hasLanded) return;
     if (departPathRef.current.active) return;
     const normal = new THREE.Vector3(...placement.normal).normalize();
     const lock = cameraLockRef?.current;
@@ -1401,11 +1401,11 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey, c
     departPathRef.current.end.copy(end);
     departPathRef.current.t = 0;
     departPathRef.current.active = true;
-  }, [active, depart, loop, placement, ship, cameraLockRef]);
+  }, [active, depart, loop, placement, ship, cameraLockRef, hasLanded]);
 
   useFrame((_, dt) => {
     if (!active || !ship) return;
-    if (!landedRef.current) {
+    if (!hasLanded) {
       tRef.current = Math.min(1, tRef.current + dt * 0.145);
       const t = tRef.current;
       const inv = 1 - t;
@@ -1445,13 +1445,13 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey, c
       }
       if (t >= 1 && !doneRef.current) {
         doneRef.current = true;
-        landedRef.current = true;
+        setHasLanded(true);
         landedPosRef.current = ship.position.clone();
         landedQuatRef.current = ship.quaternion.clone();
         if (loop) {
           tRef.current = 0;
           doneRef.current = false;
-          landedRef.current = false;
+          setHasLanded(false);
           landedPosRef.current = null;
           landedQuatRef.current = null;
         } else {
@@ -1484,11 +1484,12 @@ function TrainLanding({ active, placement, onArrive, loop = false, landingKey, c
       if (t >= 1) {
         ship.visible = false;
         departPathRef.current.active = false;
+        onDepart?.();
       }
       return;
     }
 
-    if (landedRef.current && landedPosRef.current) {
+    if (hasLanded && landedPosRef.current) {
       ship.position.copy(landedPosRef.current);
       if (landedQuatRef.current) {
         ship.quaternion.copy(landedQuatRef.current);
@@ -1524,6 +1525,7 @@ export default function LandingScene({
   focusId = null,
   shipLandingActive = false,
   onShipArrive,
+  onShipDepart,
   shipTestMode = false,
   shipLandingKey = 0,
   cityBuilt = false,
@@ -1799,6 +1801,7 @@ export default function LandingScene({
             active={shipLandingActive}
             placement={placementWorld}
             onArrive={shipTestMode ? undefined : onShipArrive}
+            onDepart={onShipDepart}
             loop={shipTestMode}
             landingKey={shipLandingKey}
             cameraLockRef={landingCamLockRef}

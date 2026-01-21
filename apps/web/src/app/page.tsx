@@ -939,6 +939,7 @@ function LandingPageClient() {
           focusId={focusedPlanet?.id ?? null}
           shipLandingActive={shipLandingActive}
           onShipArrive={completeTerraform}
+          onShipDepart={() => setShipLandingActive(false)}
           shipTestMode={shipTestMode}
           shipLandingKey={shipLandingKey}
           cityBuilt={cityBuilt}
