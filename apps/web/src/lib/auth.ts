@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from './prisma';
+import { DEFAULT_PLANET } from './planetDefaults';
 import { ERR_UNAUTHORIZED } from './errors';
 import type { User, Session } from '@prisma/client';
 
@@ -128,18 +129,38 @@ export async function findOrCreateUserByProvider(
     return existingIdentity.user;
   }
 
-  const user = await prisma.user.create({
-    data: {
-      displayName: profile.nickname || null,
-      avatarUrl: profile.profileImage || null,
-      identities: {
-        create: {
-          provider,
-          providerUserId,
-          accessToken: profile.accessToken || null,
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        displayName: profile.nickname || null,
+        avatarUrl: profile.profileImage || null,
+        identities: {
+          create: {
+            provider,
+            providerUserId,
+            accessToken: profile.accessToken || null,
+          },
         },
       },
-    },
+    });
+
+    const planet = await tx.planet.create({
+      data: {
+        ownerId: created.id,
+        seed: DEFAULT_PLANET.seed,
+        params: DEFAULT_PLANET.params,
+        palette: DEFAULT_PLANET.palette,
+        cloudColor: DEFAULT_PLANET.cloudColor,
+      },
+      select: { id: true },
+    });
+
+    await tx.user.update({
+      where: { id: created.id },
+      data: { defaultPlanetId: planet.id },
+    });
+
+    return created;
   });
 
   return user;
