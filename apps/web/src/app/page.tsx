@@ -752,6 +752,29 @@ function LandingPageClient() {
         alert(data.error?.message || "Failed to terraform planet");
         return;
       }
+      const newPlanetId = data.data?.planetId as string | undefined;
+      const createdPlanet: PlanetSummary | null = newPlanetId
+        ? {
+            id: newPlanetId,
+            seed: focusedPlanet.seed,
+            params: {
+              ...(focusedPlanet.params ?? {}),
+              cityAnchor: placement,
+            },
+            palette: focusedPlanet.palette ?? {},
+            cloudColor: focusedPlanet.cloudColor ?? {},
+            projectId: pendingProjectId ?? null,
+            city: null,
+          }
+        : null;
+      if (createdPlanet) {
+        setPlanets((prev) => {
+          const next = prev.filter((p) => p.id !== createdPlanet.id);
+          return [createdPlanet, ...next];
+        });
+        setDefaultPlanetId(createdPlanet.id);
+        setFocusedPlanet(createdPlanet);
+      }
       setShipTestMode(false);
       setPlacementMode(false);
       setCityTheme((prev) => prev);
