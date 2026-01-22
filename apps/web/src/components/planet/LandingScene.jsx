@@ -1416,6 +1416,7 @@ function TrainLanding({ active, placement, onArrive, onDepart, loop = false, lan
   const [hasLanded, setHasLanded] = useState(false);
   const landedPosRef = useRef(null);
   const landedQuatRef = useRef(null);
+  const landingPointRef = useRef(null);
   const effectRef = useRef(null);
 
   useEffect(() => {
@@ -1461,7 +1462,8 @@ function TrainLanding({ active, placement, onArrive, onDepart, loop = false, lan
     const lockedForward = lock?.forward ? lock.forward.clone() : new THREE.Vector3(0, 0, -1);
     const lockedUp = lock?.up ? lock.up.clone() : camera.up.clone();
     const normal = new THREE.Vector3(...placement.normal).normalize();
-    const endWorld = new THREE.Vector3(...placement.point).add(normal.clone().multiplyScalar(0.005));
+    landingPointRef.current = new THREE.Vector3(...placement.point);
+    const endWorld = landingPointRef.current.clone();
     const forward = lockedForward.clone();
     const cameraWorld = lockedPos.clone();
     const startWorld = cameraWorld
@@ -1487,10 +1489,15 @@ function TrainLanding({ active, placement, onArrive, onDepart, loop = false, lan
     if (!depart || loop) return;
     if (!hasLanded) return;
     if (departPathRef.current.active) return;
+    if (!landedPosRef.current) return;
     const normal = new THREE.Vector3(...placement.normal).normalize();
     const lock = cameraLockRef?.current;
     const forward = lock?.forward ? lock.forward.clone() : new THREE.Vector3(0, 0, -1);
-    const start = (landedPosRef.current || ship.position).clone();
+    const start = landedPosRef.current.clone();
+    ship.position.copy(start);
+    if (landedQuatRef.current) {
+      ship.quaternion.copy(landedQuatRef.current);
+    }
     const end = start.clone().add(normal.clone().multiplyScalar(10)).add(forward.clone().multiplyScalar(8));
     const control = start.clone().add(normal.clone().multiplyScalar(4.8)).add(forward.clone().multiplyScalar(4.2));
     departPathRef.current.start.copy(start);
@@ -1543,7 +1550,9 @@ function TrainLanding({ active, placement, onArrive, onDepart, loop = false, lan
       if (t >= 1 && !doneRef.current) {
         doneRef.current = true;
         setHasLanded(true);
-        landedPosRef.current = ship.position.clone();
+        landedPosRef.current = landingPointRef.current
+          ? landingPointRef.current.clone()
+          : ship.position.clone();
         landedQuatRef.current = ship.quaternion.clone();
         if (loop) {
           tRef.current = 0;
@@ -1640,6 +1649,8 @@ export default function LandingScene({
   const landingCamLockRef = useRef(null);
   const [cameraLockReady, setCameraLockReady] = useState(false);
   const [cameraInputLocked, setCameraInputLocked] = useState(false);
+  const landingIndexRef = useRef(null);
+  const landingOffsetRef = useRef(null);
   const spacing = 12;
   const orbitEnabled = enableOrbit || cityBuilt || shipLandingActive;
   const listLength = planets.length > 0 ? planets.length : 1;
@@ -1649,12 +1660,13 @@ export default function LandingScene({
   );
 
   useEffect(() => {
+    if (shipLandingActive) return;
     const next = -currentIndex * spacing;
     setTargetOffset(next);
     if (mode !== "carousel") {
       setDragOffset(next);
     }
-  }, [currentIndex, spacing, mode]);
+  }, [currentIndex, spacing, mode, shipLandingActive]);
 
   const [cameraOverride, setCameraOverride] = useState(false);
 
@@ -1663,6 +1675,24 @@ export default function LandingScene({
     setCameraLockReady(false);
     setCameraInputLocked(false);
     setCameraOverride(false);
+  }, [shipLandingActive]);
+
+  useEffect(() => {
+    if (shipLandingActive && landingIndexRef.current == null) {
+      landingIndexRef.current = currentIndex;
+    }
+    if (!shipLandingActive) {
+      landingIndexRef.current = null;
+    }
+  }, [shipLandingActive, currentIndex]);
+
+  useEffect(() => {
+    if (shipLandingActive && landingOffsetRef.current == null) {
+      landingOffsetRef.current = dragOffsetRef.current;
+    }
+    if (!shipLandingActive) {
+      landingOffsetRef.current = null;
+    }
   }, [shipLandingActive]);
 
   useEffect(() => {
@@ -1841,7 +1871,7 @@ export default function LandingScene({
           </>
         )}
         <CarouselLerp
-          enabled={mode === "carousel"}
+          enabled={mode === "carousel" && !shipLandingActive}
           targetOffset={targetOffset}
           setDragOffset={setDragOffset}
         />
@@ -1863,15 +1893,16 @@ export default function LandingScene({
         )}
 
         {mode === "carousel" && (
-          <group position={[dragOffset, -0.4, 0]}>
+          <group position={[shipLandingActive && landingOffsetRef.current != null ? landingOffsetRef.current : dragOffset, -0.4, 0]}>
             {list.map((planet, idx) => {
               if ((placementMode || shipLandingActive) && planet?.id !== focusId) return null;
               if (!placementMode && !shipLandingActive && idx !== visibleIndex) return null;
+              const lockedIndex = shipLandingActive && landingIndexRef.current != null ? landingIndexRef.current : idx;
               return (
                 <PlanetNode
                   key={planet.id || idx}
                   planet={planet}
-                  position={[idx * spacing, 0, 0]}
+                  position={[lockedIndex * spacing, 0, 0]}
                   onPick={(point, normal) => handlePick(planet, point, normal)}
                   placementMode={placementMode}
                   placement={placement}
